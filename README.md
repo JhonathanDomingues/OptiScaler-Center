@@ -42,8 +42,11 @@
 - Gerenciamento de múltiplas versões
 
 ### 🎨 Interface Moderna
-- Design limpo e intuitivo com PyQt6
-- Temas claro/escuro
+- Design estilo Steam com cards visuais
+- Sistema de grid responsivo
+- Tema dark moderno (#1b2838)
+- Badges de tecnologia (DLSS/FSR/XeSS)
+- Carregamento automático de imagens Steam
 - Feedback visual em tempo real
 - Logs e diagnóstico integrados
 
@@ -130,28 +133,36 @@ OptiScaler-Center/
 
 ## 🗺️ Roadmap
 
-### ✅ Fase 1: MVP (Em Desenvolvimento)
+### ✅ Fase 1: MVP (Concluído)
 - [x] Estrutura do projeto
 - [x] Documentação completa
-- [ ] Scanner de jogos Steam
-- [ ] Detecção de DLLs
-- [ ] Download de versões do GitHub
-- [ ] Instalação/desinstalação básica
-- [ ] Interface UI básica
+- [x] Scanner de jogos Steam (Windows e Linux)
+- [x] Detecção de DLLs (DLSS, FSR, XeSS)
+- [x] Download de versões do GitHub
+- [x] Instalação/desinstalação básica
+- [x] Interface UI moderna com cards estilo Steam
+- [x] Banco de dados SQLite
+- [x] Sistema de backup automático
+- [x] Logs e diagnóstico
 
-### 🔄 Fase 2: Recursos Essenciais (Planejado)
-- [ ] Adição manual de jogos
-- [ ] Suporte FSR4 SDK
-- [ ] Perfis de configuração
+### 🔄 Fase 2: Recursos Essenciais (Em Desenvolvimento)
+- [x] Adição manual de jogos
+- [x] Suporte FSR4 SDK (DLLs padrão e INT8)
+- [x] Interface moderna com tema dark
+- [ ] Perfis de configuração por jogo
 - [ ] Atualização em lote
-- [ ] Temas claro/escuro
+- [ ] Sistema de busca e filtros avançados
+- [ ] Tema claro (alternativo)
 
-### 🔮 Fase 3: Extras (Futuro)
-- [ ] Integração Epic/GOG
+### 🔮 Fase 3: Extras (Planejado)
+- [ ] Integração Epic/GOG/EA/Ubisoft
+- [ ] Download automático de imagens (SteamGridDB)
 - [ ] Benchmark integrado
-- [ ] Multi-idioma
-- [ ] Cloud sync
-- [ ] Auto-update
+- [ ] Multi-idioma (EN, PT-BR, ES)
+- [ ] Cloud sync de configurações
+- [ ] Auto-update da aplicação
+- [ ] Estatísticas de uso
+- [ ] Modo portátil
 
 Veja o [roadmap completo](DOCUMENTATION.md#roadmap-de-desenvolvimento).
 
