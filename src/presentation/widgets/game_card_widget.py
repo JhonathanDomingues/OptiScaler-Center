@@ -38,8 +38,9 @@ class GameCardWidget(QFrame):
         # Aplicar estilo
         self.setStyleSheet(GAME_CARD_STYLE)
         
-        # Tamanho do card - ajustado para formato vertical
-        self.setFixedSize(200, 320)
+        # Tamanho do card - responsivo com min/max
+        self.setMinimumSize(180, 300)
+        self.setMaximumSize(240, 380)
         
         self._init_ui()
     
@@ -49,10 +50,14 @@ class GameCardWidget(QFrame):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Imagem do jogo - formato vertical
+        # Imagem do jogo - formato vertical responsivo
         self.image_label = QLabel()
         self.image_label.setObjectName("gameImage")
-        self.image_label.setFixedSize(200, 300)
+        self.image_label.setMinimumHeight(240)
+        self.image_label.setSizePolicy(
+            self.sizePolicy().Policy.Expanding,
+            self.sizePolicy().Policy.Expanding
+        )
         self.image_label.setScaledContents(False)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
@@ -146,22 +151,24 @@ class GameCardWidget(QFrame):
             try:
                 pixmap = QPixmap(str(image_path))
                 if not pixmap.isNull():
-                    # Redimensionar mantendo proporção SEM cortar
-                    # KeepAspectRatio garante que a imagem caiba dentro do espaço
+                    # Redimensionar mantendo proporção
+                    card_width = max(200, self.width())
+                    card_height = max(280, int(card_width * 1.4))
+                    
                     pixmap = pixmap.scaled(
-                        200, 300,
+                        card_width, card_height,
                         Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation
                     )
                     
                     # Se a imagem for menor que o card, centralizar em fundo escuro
-                    if pixmap.width() < 200 or pixmap.height() < 300:
-                        final_pixmap = QPixmap(200, 300)
+                    if pixmap.width() < card_width or pixmap.height() < card_height:
+                        final_pixmap = QPixmap(card_width, card_height)
                         final_pixmap.fill(QColor("#0e1419"))
                         
                         painter = QPainter(final_pixmap)
-                        x_offset = (200 - pixmap.width()) // 2
-                        y_offset = (300 - pixmap.height()) // 2
+                        x_offset = (card_width - pixmap.width()) // 2
+                        y_offset = (card_height - pixmap.height()) // 2
                         painter.drawPixmap(x_offset, y_offset, pixmap)
                         painter.end()
                         
@@ -256,8 +263,11 @@ class GameCardWidget(QFrame):
         return None
     
     def _create_placeholder(self):
-        """Cria imagem placeholder"""
-        pixmap = QPixmap(200, 300)
+        """Cria imagem placeholder responsivo"""
+        card_width = max(200, self.width())
+        card_height = max(280, int(card_width * 1.4))
+        
+        pixmap = QPixmap(card_width, card_height)
         pixmap.fill(QColor("#0e1419"))
         
         painter = QPainter(pixmap)
@@ -267,7 +277,7 @@ class GameCardWidget(QFrame):
         pen = QPen(QColor("#2a475e"))
         pen.setWidth(2)
         painter.setPen(pen)
-        painter.drawRect(1, 1, 198, 298)
+        painter.drawRect(1, 1, card_width - 2, card_height - 2)
         
         # Desenhar texto com nome do jogo
         painter.setPen(QColor("#8f98a0"))
@@ -280,14 +290,25 @@ class GameCardWidget(QFrame):
         painter.setFont(font)
         
         game_name = self.game.name[:40] + ("..." if len(self.game.name) > 40 else "")
+        text_margin = int(card_width * 0.05)
         painter.drawText(
-            QRect(10, 10, 180, 280),
+            QRect(text_margin, text_margin, card_width - text_margin * 2, card_height - text_margin * 2),
             Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
             game_name
         )
         
         painter.end()
         self.image_label.setPixmap(pixmap)
+    
+    def resizeEvent(self, event):
+        """Recarrega imagem quando o card é redimensionado"""
+        super().resizeEvent(event)
+        # Recarregar imagem apenas se o tamanho mudou significativamente
+        if hasattr(self, '_last_size'):
+            width_diff = abs(event.size().width() - self._last_size.width())
+            if width_diff > 20:  # Mudança significativa
+                self._load_game_image()
+        self._last_size = event.size()
     
     def mousePressEvent(self, event):
         """Evento de clique no card"""

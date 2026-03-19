@@ -70,9 +70,9 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         container_layout.setContentsMargins(15, 15, 15, 15)
         
         # Scroll area para grid de jogos
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
         # Widget container para o grid
         self.grid_container = QWidget()
@@ -81,8 +81,8 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self.grid_container.setLayout(self.grid_layout)
         
-        scroll_area.setWidget(self.grid_container)
-        container_layout.addWidget(scroll_area, 1)
+        self.scroll_area.setWidget(self.grid_container)
+        container_layout.addWidget(self.scroll_area, 1)
         
         container.setLayout(container_layout)
         main_layout.addWidget(container)
@@ -160,14 +160,13 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             if item.widget():
                 item.widget().deleteLater()
         
-        # Adicionar cards com cálculo responsivo
-        # 200 (largura card) + 15 (spacing) = 215px por card
-        available_width = self.grid_container.width()
-        columns = max(1, available_width // 215)
+        # Calcular número de colunas baseado na largura disponível
+        self._current_columns = self._calculate_columns()
         
+        # Adicionar cards
         for idx, game in enumerate(self.filtered_games):
-            row = idx // columns
-            col = idx % columns
+            row = idx // self._current_columns
+            col = idx % self._current_columns
             
             card = GameCardWidget(game)
             card.clicked.connect(self._on_game_clicked)
@@ -180,39 +179,48 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         # Atualizar contador
         self.game_count_label.setText(f"{len(self.filtered_games)} jogos")
     
+    def _calculate_columns(self) -> int:
+        """Calcula número de colunas baseado na largura disponível"""
+        if not hasattr(self, 'scroll_area'):
+            return 3  # Valor padrão
+        
+        # Obter largura disponível do viewport
+        available_width = self.scroll_area.viewport().width() - 30  # Margem
+        
+        # Largura mínima do card + espaçamento
+        card_min_width = 200  # Card mínimo: 180 + margem
+        spacing = self.grid_layout.spacing()
+        
+        # Calcular colunas (mínimo 1, máximo 6)
+        columns = max(1, min(6, available_width // (card_min_width + spacing)))
+        
+        return columns
+    
     def resizeEvent(self, event):
         """Reorganiza grid quando janela é redimensionada"""
         super().resizeEvent(event)
         
-        # Forçar reorganização imediata para aumentar E diminuir
+        # Reorganizar apenas se houver mudança significativa
         if hasattr(self, 'game_cards') and self.game_cards:
             from PyQt6.QtCore import QTimer
-            # Usar QTimer.singleShot para agendar reorganização após o evento
-            # Usar delay maior para garantir que o layout se estabilize
-            QTimer.singleShot(100, self._reorganize_grid)
+            # Agendar reorganização com delay para evitar múltiplas chamadas
+            QTimer.singleShot(50, self._reorganize_grid)
     
     def _reorganize_grid(self):
         """Reorganiza cards no grid baseado na largura atual"""
         if not hasattr(self, 'game_cards') or not self.game_cards:
             return
         
-        # Calcular número de colunas baseado na largura disponível
-        # Usar scroll area width ao invés de grid_container
-        scroll_area = self.grid_container.parent()
-        if scroll_area:
-            available_width = scroll_area.viewport().width() - 30  # Margem + scrollbar
-        else:
-            available_width = self.grid_container.width() - 30
-        
-        columns = max(1, available_width // 215)  # 200 (card) + 15 (spacing)
+        # Calcular novo número de colunas
+        new_columns = self._calculate_columns()
         
         # Verificar se o número de colunas mudou
-        if hasattr(self, '_current_columns') and self._current_columns == columns:
+        if hasattr(self, '_current_columns') and self._current_columns == new_columns:
             return  # Não reorganizar se o número de colunas não mudou
         
-        self._current_columns = columns
+        self._current_columns = new_columns
         
-        # Remover todos os widgets do layout
+        # Remover todos os widgets do layout sem deletar
         for i in reversed(range(self.grid_layout.count())):
             item = self.grid_layout.itemAt(i)
             if item and item.widget():
@@ -220,12 +228,12 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         
         # Adicionar novamente na nova configuração
         for idx, card in enumerate(self.game_cards):
-            row = idx // columns
-            col = idx % columns
+            row = idx // new_columns
+            col = idx % new_columns
             self.grid_layout.addWidget(card, row, col)
         
         # Forçar atualização do layout
-        self.grid_layout.update()
+        self.grid_layout.activate()
         self.grid_container.updateGeometry()
     
     def _scan_games(self):
