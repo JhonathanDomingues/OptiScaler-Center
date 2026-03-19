@@ -146,19 +146,29 @@ class GameCardWidget(QFrame):
             try:
                 pixmap = QPixmap(str(image_path))
                 if not pixmap.isNull():
-                    # Redimensionar mantendo proporção para preencher o card
+                    # Redimensionar mantendo proporção SEM cortar
+                    # KeepAspectRatio garante que a imagem caiba dentro do espaço
                     pixmap = pixmap.scaled(
                         200, 300,
-                        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                        Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation
                     )
-                    # Centralizar crop se necessário
-                    if pixmap.width() > 200 or pixmap.height() > 300:
-                        x_offset = (pixmap.width() - 200) // 2
-                        y_offset = (pixmap.height() - 300) // 2
-                        pixmap = pixmap.copy(x_offset, y_offset, 200, 300)
                     
-                    self.image_label.setPixmap(pixmap)
+                    # Se a imagem for menor que o card, centralizar em fundo escuro
+                    if pixmap.width() < 200 or pixmap.height() < 300:
+                        final_pixmap = QPixmap(200, 300)
+                        final_pixmap.fill(QColor("#0e1419"))
+                        
+                        painter = QPainter(final_pixmap)
+                        x_offset = (200 - pixmap.width()) // 2
+                        y_offset = (300 - pixmap.height()) // 2
+                        painter.drawPixmap(x_offset, y_offset, pixmap)
+                        painter.end()
+                        
+                        self.image_label.setPixmap(final_pixmap)
+                    else:
+                        self.image_label.setPixmap(pixmap)
+                    
                     return
             except Exception as e:
                 print(f"Erro ao carregar imagem de {image_path}: {e}")
