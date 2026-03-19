@@ -185,23 +185,43 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         """Reorganiza grid quando janela é redimensionada"""
         super().resizeEvent(event)
         
-        # Recalcular e reorganizar grid após pequeno delay para evitar múltiplas reorganizações
-        if hasattr(self, 'filtered_games') and self.filtered_games:
-            # Limpar layout atual
-            for i in reversed(range(self.grid_layout.count())):
-                item = self.grid_layout.itemAt(i)
-                if item and item.widget():
-                    self.grid_layout.removeItem(item)
+        # Reorganizar grid apenas se houver jogos
+        if hasattr(self, 'game_cards') and self.game_cards and hasattr(self, 'grid_container'):
+            # Agendar reorganização para evitar múltiplas chamadas
+            from PyQt6.QtCore import QTimer
+            if not hasattr(self, '_resize_timer'):
+                self._resize_timer = QTimer()
+                self._resize_timer.setSingleShot(True)
+                self._resize_timer.timeout.connect(self._reorganize_grid)
             
-            # Recalcular colunas baseado na nova largura
-            available_width = self.grid_container.width()
-            columns = max(1, available_width // 295)  # 280 (card) + 15 (spacing)
-            
-            # Reorganizar cards no grid
-            for idx, card in enumerate(self.game_cards):
-                row = idx // columns
-                col = idx % columns
-                self.grid_layout.addWidget(card, row, col)
+            self._resize_timer.stop()
+            self._resize_timer.start(100)  # 100ms delay
+    
+    def _reorganize_grid(self):
+        """Reorganiza cards no grid baseado na largura atual"""
+        if not hasattr(self, 'game_cards') or not self.game_cards:
+            return
+        
+        # Calcular número de colunas baseado na largura disponível
+        available_width = self.grid_container.width() - 30  # Margem
+        columns = max(1, available_width // 295)  # 280 (card) + 15 (spacing)
+        
+        # Reorganizar apenas se mudou o número de colunas
+        current_columns = getattr(self, '_current_columns', 0)
+        if columns == current_columns:
+            return
+        
+        self._current_columns = columns
+        
+        # Remover todos os widgets do layout
+        for i in reversed(range(self.grid_layout.count())):
+            self.grid_layout.itemAt(i).widget().setParent(None)
+        
+        # Adicionar novamente na nova configuração
+        for idx, card in enumerate(self.game_cards):
+            row = idx // columns
+            col = idx % columns
+            self.grid_layout.addWidget(card, row, col)
     
     def _scan_games(self):
         """Varre jogos Steam"""

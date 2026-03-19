@@ -176,35 +176,52 @@ class GameCardWidget(QFrame):
         if custom_image and custom_image.exists():
             return custom_image
         
-        # Padrões Steam: library_600x900, hero, header
-        # Linux paths
-        possible_paths = [
-            Path.home() / ".local" / "share" / "Steam" / "appcache" / "librarycache" / f"{self.game.appid}_library_600x900.jpg",
-            Path.home() / ".steam" / "steam" / "appcache" / "librarycache" / f"{self.game.appid}_library_600x900.jpg",
-            Path.home() / ".local" / "share" / "Steam" / "appcache" / "librarycache" / f"{self.game.appid}_library_hero.jpg",
-            Path.home() / ".local" / "share" / "Steam" / "appcache" / "librarycache" / f"{self.game.appid}_header.jpg",
-        ]
-        
-        # Windows paths
         import platform
-        if platform.system() == "Windows":
+        import glob
+        
+        # Diretórios base do Steam
+        steam_cache_dirs = []
+        
+        if platform.system() == "Linux":
+            steam_cache_dirs = [
+                Path.home() / ".local" / "share" / "Steam" / "appcache" / "librarycache",
+                Path.home() / ".steam" / "steam" / "appcache" / "librarycache",
+            ]
+        elif platform.system() == "Windows":
             import os
             program_files = os.environ.get('ProgramFiles(x86)', 'C:\\Program Files (x86)')
-            steam_path = Path(program_files) / "Steam"
-            possible_paths.extend([
-                steam_path / "appcache" / "librarycache" / f"{self.game.appid}_library_600x900.jpg",
-                steam_path / "appcache" / "librarycache" / f"{self.game.appid}_library_hero.jpg",
-                steam_path / "appcache" / "librarycache" / f"{self.game.appid}_header.jpg",
-            ])
+            steam_cache_dirs = [
+                Path(program_files) / "Steam" / "appcache" / "librarycache",
+            ]
         
-        for path in possible_paths:
-            if path.exists():
-                return path
+        # Buscar imagens para este AppID
+        for cache_dir in steam_cache_dirs:
+            if not cache_dir.exists():
+                continue
+            
+            # Nova estrutura: diretório por AppID com subdiretórios hash
+            appid_dir = cache_dir / str(self.game.appid)
+            if appid_dir.exists():
+                # Procurar por imagens dentro dos subdiretórios
+                for img_name in ['library_hero.jpg', 'library_capsule.jpg', 'library_header.jpg', 'portrait.png', 'logo.png']:
+                    found_images = list(appid_dir.rglob(img_name))
+                    if found_images:
+                        return found_images[0]
+            
+            # Estrutura antiga: arquivos diretos com padrão appid_tipo.jpg
+            for img_pattern in [
+                f"{self.game.appid}_library_600x900.jpg",
+                f"{self.game.appid}_library_hero.jpg",
+                f"{self.game.appid}_header.jpg",
+            ]:
+                img_path = cache_dir / img_pattern
+                if img_path.exists():
+                    return img_path
         
         return None
     
     def _create_placeholder(self):
-        """Cria imagem placeholder com ícone de controle"""
+        """Cria imagem placeholder"""
         pixmap = QPixmap(280, 135)
         pixmap.fill(QColor("#0e1419"))
         
@@ -217,35 +234,20 @@ class GameCardWidget(QFrame):
         painter.setPen(pen)
         painter.drawRect(1, 1, 278, 133)
         
-        # Desenhar ícone de controle simplificado
-        painter.setPen(QPen(QColor("#4c5f6b"), 3))
-        painter.setBrush(QColor("#1b2838"))
-        
-        # Corpo do controle (retângulo arredondado)
-        from PyQt6.QtCore import QRect
-        painter.drawRoundedRect(QRect(80, 45, 120, 50), 15, 15)
-        
-        # D-pad (esquerda)
-        painter.drawRect(95, 60, 12, 20)
-        painter.drawRect(89, 66, 24, 8)
-        
-        # Botões (direita)
-        painter.drawEllipse(155, 60, 12, 12)
-        painter.drawEllipse(165, 70, 12, 12)
-        painter.drawEllipse(145, 70, 12, 12)
-        painter.drawEllipse(155, 80, 12, 12)
-        
-        # Nome do jogo
+        # Desenhar texto com nome do jogo
         painter.setPen(QColor("#8f98a0"))
         from PyQt6.QtGui import QFont
+        from PyQt6.QtCore import QRect
+        
         font = QFont()
-        font.setPixelSize(12)
+        font.setPixelSize(14)
+        font.setBold(True)
         painter.setFont(font)
         
-        game_name = self.game.name[:35] + ("..." if len(self.game.name) > 35 else "")
+        game_name = self.game.name[:40] + ("..." if len(self.game.name) > 40 else "")
         painter.drawText(
-            QRect(10, 100, 260, 30),
-            Qt.AlignmentFlag.AlignCenter,
+            QRect(10, 10, 260, 115),
+            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
             game_name
         )
         

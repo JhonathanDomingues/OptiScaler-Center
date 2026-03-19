@@ -16,6 +16,7 @@ from utils.constants import APP_NAME, APP_VERSION
 from infrastructure.config.config_service import ConfigService
 from infrastructure.database.db_service import DatabaseService
 from presentation.main_window import MainWindow
+from presentation.resources.app_icon import create_app_icon
 
 
 def main():
@@ -33,6 +34,9 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
+    
+    # Definir ícone da aplicação
+    app.setWindowIcon(create_app_icon(64))
     
     # High DPI é habilitado por padrão no PyQt6
     

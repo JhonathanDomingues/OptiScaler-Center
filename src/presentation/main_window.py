@@ -22,6 +22,7 @@ from application.use_cases.install_optiscaler import InstallOptiScalerUseCase
 from application.use_cases.uninstall_optiscaler import UninstallOptiScalerUseCase
 from presentation.widgets.game_library_widget_modern import GameLibraryWidget
 from presentation.styles.modern_theme import apply_modern_theme, MODERN_THEME
+from presentation.resources.app_icon import create_app_icon
 from utils.logger import LoggerMixin
 from utils.constants import APP_NAME, APP_VERSION
 
@@ -65,6 +66,9 @@ class MainWindow(QMainWindow, LoggerMixin):
         # Configurações da janela
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
         self.setMinimumSize(1000, 700)
+        
+        # Definir ícone da janela
+        self.setWindowIcon(create_app_icon(64))
         
         # Widget central
         central_widget = QWidget()
