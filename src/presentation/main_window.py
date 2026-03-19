@@ -21,6 +21,7 @@ from application.use_cases.download_version import DownloadVersionUseCase
 from application.use_cases.install_optiscaler import InstallOptiScalerUseCase
 from application.use_cases.uninstall_optiscaler import UninstallOptiScalerUseCase
 from presentation.widgets.game_library_widget_modern import GameLibraryWidget
+from presentation.widgets.downloads_manager_widget import DownloadsManagerWidget
 from presentation.styles.modern_theme import apply_modern_theme, MODERN_THEME
 from presentation.resources.app_icon import create_app_icon
 from utils.logger import LoggerMixin
@@ -131,28 +132,19 @@ class MainWindow(QMainWindow, LoggerMixin):
         )
         tabs.addTab(self.library_widget, "📚 Biblioteca")
         
-        # Aba Downloads (placeholder)
-        downloads_tab = self._create_downloads_tab()
-        tabs.addTab(downloads_tab, "📥 Downloads")
+        # Aba Downloads
+        self.downloads_widget = DownloadsManagerWidget(
+            self.fetch_versions_uc,
+            self.download_version_uc,
+            self.database
+        )
+        tabs.addTab(self.downloads_widget, "📥 Downloads")
         
         # Aba Logs (placeholder)
         logs_tab = self._create_logs_tab()
         tabs.addTab(logs_tab, "📋 Logs")
         
         return tabs
-    
-    def _create_downloads_tab(self) -> QWidget:
-        """Cria aba de downloads"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        
-        # Placeholder
-        label = QLabel("Gerenciador de Downloads\n\n"
-                      "Aqui você poderá baixar versões do OptiScaler.")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(label)
-        
-        return widget
     
     def _create_logs_tab(self) -> QWidget:
         """Cria aba de logs"""

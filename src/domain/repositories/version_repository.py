@@ -267,12 +267,12 @@ class VersionRepository(LoggerMixin):
         return OptiScalerVersion(
             id=row['id'],
             tag_name=row['tag_name'],
-            name=row['name'],
-            description=row['description'],
+            name=row['name'] or "",
+            description=row['description'] or "",
             release_date=release_date,
             is_prerelease=bool(row['is_prerelease']),
-            download_url=row['download_url'],
-            file_size=row['file_size'],
-            local_path=Path(row['local_path']) if row['local_path'] else None,
+            download_url=row['download_url'] or "",
+            total_size=row['file_size'] or 0,
+            cache_path=Path(row['local_path']) if row['local_path'] else None,
             is_downloaded=bool(row['is_downloaded'])
         )

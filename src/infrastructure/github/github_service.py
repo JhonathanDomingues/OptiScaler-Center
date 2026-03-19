@@ -15,7 +15,7 @@ from domain.entities.optiscaler_version import OptiScalerVersion
 class GitHubService(LoggerMixin):
     """Gerencia downloads de releases do GitHub"""
     
-    REPO_OWNER = "cdozdil"
+    REPO_OWNER = "optiscaler"
     REPO_NAME = "OptiScaler"
     API_BASE = "https://api.github.com"
     
@@ -242,20 +242,21 @@ class GitHubService(LoggerMixin):
             OptiScalerVersion ou None
         """
         try:
-            # Encontrar asset principal (zip)
+            # Encontrar asset principal (zip ou 7z)
             assets = release_data.get('assets', [])
             main_asset = None
             
             for asset in assets:
                 name = asset['name'].lower()
-                if name.endswith('.zip') and 'optiscaler' in name:
+                if (name.endswith('.zip') or name.endswith('.7z')) and 'optiscaler' in name:
                     main_asset = asset
                     break
             
-            # Se não encontrou zip específico, pegar primeiro
+            # Se não encontrou específico, pegar primeiro zip ou 7z
             if not main_asset and assets:
                 for asset in assets:
-                    if asset['name'].lower().endswith('.zip'):
+                    name = asset['name'].lower()
+                    if name.endswith('.zip') or name.endswith('.7z'):
                         main_asset = asset
                         break
             
@@ -271,8 +272,8 @@ class GitHubService(LoggerMixin):
             
             # Verificar se já está baixado
             filename = main_asset['name']
-            local_path = self.cache_dir / filename
-            is_downloaded = local_path.exists()
+            cache_path = self.cache_dir / filename
+            is_downloaded = cache_path.exists()
             
             return OptiScalerVersion(
                 tag_name=release_data['tag_name'],
@@ -281,8 +282,8 @@ class GitHubService(LoggerMixin):
                 release_date=published_at,
                 is_prerelease=release_data['prerelease'],
                 download_url=main_asset['browser_download_url'],
-                file_size=main_asset['size'],
-                local_path=local_path if is_downloaded else None,
+                total_size=main_asset['size'],
+                cache_path=cache_path if is_downloaded else None,
                 is_downloaded=is_downloaded
             )
         

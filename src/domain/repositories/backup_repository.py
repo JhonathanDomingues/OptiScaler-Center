@@ -2,7 +2,6 @@
 Repository para gerenciar backups de DLLs
 """
 import sqlite3
-import json
 from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
@@ -34,46 +33,44 @@ class BackupRepository(LoggerMixin):
             ID do backup salvo
         """
         cursor = self.conn.cursor()
-        
+
         try:
-            # Serializar lista de arquivos
-            files_json = json.dumps([str(f) for f in backup.files])
-            
             if backup.id:
                 # Atualizar existente
                 cursor.execute("""
                     UPDATE backups SET
                         game_id = ?,
                         backup_path = ?,
-                        files = ?,
+                        file_count = ?,
                         total_size = ?,
-                        status = ?
+                        notes = ?
                     WHERE id = ?
                 """, (
                     backup.game_id,
                     str(backup.backup_path),
-                    files_json,
+                    backup.file_count,
                     backup.total_size,
-                    backup.status,
+                    backup.notes,
                     backup.id
                 ))
-                
+
                 backup_id = backup.id
-            
+
             else:
                 # Inserir novo
+                backup_date = backup.backup_date or datetime.now()
                 cursor.execute("""
                     INSERT INTO backups (
-                        game_id, backup_path, files, total_size,
-                        status, created_at
+                        game_id, backup_path, backup_date,
+                        file_count, total_size, notes
                     ) VALUES (?, ?, ?, ?, ?, ?)
                 """, (
                     backup.game_id,
                     str(backup.backup_path),
-                    files_json,
+                    backup_date.isoformat(),
+                    backup.file_count,
                     backup.total_size,
-                    backup.status,
-                    backup.created_at.isoformat()
+                    backup.notes
                 ))
                 
                 backup_id = cursor.lastrowid
@@ -237,23 +234,14 @@ class BackupRepository(LoggerMixin):
         Returns:
             Backup objeto
         """
-        # Deserializar lista de arquivos
-        files = []
-        if row['files']:
-            try:
-                files_list = json.loads(row['files'])
-                files = [Path(f) for f in files_list]
-            except:
-                pass
-        
-        created_at = datetime.fromisoformat(row['created_at'])
-        
+        backup_date = datetime.fromisoformat(row['backup_date']) if row['backup_date'] else datetime.now()
+
         return Backup(
             id=row['id'],
             game_id=row['game_id'],
             backup_path=Path(row['backup_path']),
-            files=files,
-            total_size=row['total_size'],
-            status=row['status'],
-            created_at=created_at
+            backup_date=backup_date,
+            file_count=row['file_count'] or 0,
+            total_size=row['total_size'] or 0,
+            notes=row['notes'] or ''
         )

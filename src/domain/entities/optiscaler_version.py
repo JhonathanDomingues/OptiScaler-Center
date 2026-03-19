@@ -13,6 +13,8 @@ class OptiScalerVersion:
     id: Optional[int] = None
     version: str = ""
     tag_name: str = ""
+    name: str = ""  # Nome da release no GitHub
+    description: str = ""  # Descrição/changelog da release
     release_date: Optional[datetime] = None
     download_date: Optional[datetime] = None
     cache_path: Optional[Path] = None
@@ -20,10 +22,31 @@ class OptiScalerVersion:
     file_count: int = 0
     total_size: int = 0
     download_url: str = ""
+    is_downloaded: bool = False  # Flag se está baixada
     
     # Metadados do GitHub release
     is_prerelease: bool = False
     github_id: Optional[int] = None
+    
+    @property
+    def local_path(self) -> Optional[Path]:
+        """Alias para cache_path (compatibilidade)"""
+        return self.cache_path
+    
+    @local_path.setter
+    def local_path(self, value: Optional[Path]):
+        """Setter para loca_path (compatibilidade)"""
+        self.cache_path = value
+    
+    @property
+    def file_size(self) -> int:
+        """Alias para total_size (compatibilidade)"""
+        return self.total_size
+    
+    @file_size.setter
+    def file_size(self, value: int):
+        """Setter para file_size (compatibilidade)"""
+        self.total_size = value
     
     @property
     def is_cached(self) -> bool:

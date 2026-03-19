@@ -185,11 +185,12 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         """Reorganiza grid quando janela é redimensionada"""
         super().resizeEvent(event)
         
-        # Forçar reorganização imediata
+        # Forçar reorganização imediata para aumentar E diminuir
         if hasattr(self, 'game_cards') and self.game_cards:
             from PyQt6.QtCore import QTimer
             # Usar QTimer.singleShot para agendar reorganização após o evento
-            QTimer.singleShot(50, self._reorganize_grid)
+            # Usar delay maior para garantir que o layout se estabilize
+            QTimer.singleShot(100, self._reorganize_grid)
     
     def _reorganize_grid(self):
         """Reorganiza cards no grid baseado na largura atual"""
@@ -206,7 +207,12 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         
         columns = max(1, available_width // 215)  # 200 (card) + 15 (spacing)
         
-        # Sempre reorganizar (remover verificação de _current_columns)
+        # Verificar se o número de colunas mudou
+        if hasattr(self, '_current_columns') and self._current_columns == columns:
+            return  # Não reorganizar se o número de colunas não mudou
+        
+        self._current_columns = columns
+        
         # Remover todos os widgets do layout
         for i in reversed(range(self.grid_layout.count())):
             item = self.grid_layout.itemAt(i)
@@ -218,6 +224,10 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             row = idx // columns
             col = idx % columns
             self.grid_layout.addWidget(card, row, col)
+        
+        # Forçar atualização do layout
+        self.grid_layout.update()
+        self.grid_container.updateGeometry()
     
     def _scan_games(self):
         """Varre jogos Steam"""
@@ -313,6 +323,29 @@ class GameLibraryWidget(QWidget, LoggerMixin):
     def _on_install_requested(self, game: Game):
         """Callback quando instalação é solicitada"""
         self.current_game = game
+        
+        # Verificar se existem versões baixadas
+        try:
+            downloaded_versions = self.fetch_versions_uc.get_downloaded_versions()
+            
+            if not downloaded_versions:
+                reply = QMessageBox.question(
+                    self,
+                    "Nenhuma Versão Disponível",
+                    "Você ainda não baixou nenhuma versão do OptiScaler.\n\n"
+                    "Deseja ir para a aba de Downloads para baixar uma versão?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if reply == QMessageBox.StandardButton.Yes:
+                    # Mudar para aba de Downloads
+                    parent_tabs = self.parent()
+                    if parent_tabs and hasattr(parent_tabs, 'setCurrentIndex'):
+                        parent_tabs.setCurrentIndex(1)  # Índice da aba Downloads
+                
+                return
+        except Exception as e:
+            self.logger.error(f"Erro ao verificar versões: {e}")
         
         # Mostrar diálogo de instalação
         dialog = InstallDialog(game, self.fetch_versions_uc, self)

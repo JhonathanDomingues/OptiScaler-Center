@@ -99,14 +99,17 @@ class DatabaseService(LoggerMixin):
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS optiscaler_versions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    version TEXT NOT NULL UNIQUE,
-                    tag_name TEXT,
+                    tag_name TEXT NOT NULL UNIQUE,
+                    name TEXT,
+                    description TEXT,
                     release_date DATETIME,
-                    download_date DATETIME,
-                    cache_path TEXT,
-                    changelog TEXT,
-                    file_count INTEGER,
-                    total_size INTEGER
+                    is_prerelease INTEGER DEFAULT 0,
+                    download_url TEXT,
+                    file_size INTEGER,
+                    local_path TEXT,
+                    is_downloaded INTEGER DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
@@ -229,6 +232,43 @@ class DatabaseService(LoggerMixin):
                         ))
                     
                     self.logger.info("✓ Migração da tabela game_dlls concluída")
+                
+                # Migração 3: Atualizar estrutura da tabela optiscaler_versions
+                cursor.execute("PRAGMA table_info(optiscaler_versions)")
+                version_columns = {col[1]: col for col in cursor.fetchall()}
+                
+                # Se tiver 'version' em vez de ter todas as colunas necessárias
+                required_columns = ['tag_name', 'name', 'description', 'is_prerelease', 
+                                   'download_url', 'file_size', 'local_path', 'is_downloaded']
+                missing_columns = [col for col in required_columns if col not in version_columns]
+                
+                if missing_columns or 'version' in version_columns:
+                    self.logger.info("Migrando estrutura da tabela optiscaler_versions...")
+                    
+                    # Backup dos dados se houver
+                    cursor.execute("SELECT * FROM optiscaler_versions")
+                    old_data = cursor.fetchall()
+                    
+                    # Recriar tabela
+                    cursor.execute("DROP TABLE IF EXISTS optiscaler_versions")
+                    cursor.execute('''
+                        CREATE TABLE optiscaler_versions (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            tag_name TEXT NOT NULL UNIQUE,
+                            name TEXT,
+                            description TEXT,
+                            release_date DATETIME,
+                            is_prerelease INTEGER DEFAULT 0,
+                            download_url TEXT,
+                            file_size INTEGER,
+                            local_path TEXT,
+                            is_downloaded INTEGER DEFAULT 0,
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                    
+                    self.logger.info("✓ Migração da tabela optiscaler_versions concluída")
                 
         except Exception as e:
             self.logger.warning(f"Erro durante migração: {e}")

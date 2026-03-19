@@ -4,10 +4,10 @@ Repository para gerenciar instalações do OptiScaler
 import sqlite3
 from typing import List, Optional
 from datetime import datetime
+from pathlib import Path
 
 from utils.logger import LoggerMixin
 from domain.entities.installation import Installation
-from domain.enums.dll_type import DLLType
 
 
 class InstallationRepository(LoggerMixin):
@@ -40,39 +40,37 @@ class InstallationRepository(LoggerMixin):
                 cursor.execute("""
                     UPDATE installations SET
                         game_id = ?,
-                        version_id = ?,
-                        dll_type = ?,
-                        backup_id = ?,
-                        status = ?,
-                        updated_at = ?
+                        version = ?,
+                        backup_path = ?,
+                        config_path = ?,
+                        status = ?
                     WHERE id = ?
                 """, (
                     installation.game_id,
-                    installation.version_id,
-                    installation.dll_type.value,
-                    installation.backup_id,
+                    installation.version,
+                    str(installation.backup_path) if installation.backup_path else None,
+                    str(installation.config_path) if installation.config_path else None,
                     installation.status,
-                    datetime.now().isoformat(),
                     installation.id
                 ))
-                
+
                 install_id = installation.id
-            
+
             else:
                 # Inserir nova
+                install_date = installation.install_date or datetime.now()
                 cursor.execute("""
                     INSERT INTO installations (
-                        game_id, version_id, dll_type, backup_id,
-                        status, installed_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        game_id, version, install_date,
+                        backup_path, config_path, status
+                    ) VALUES (?, ?, ?, ?, ?, ?)
                 """, (
                     installation.game_id,
-                    installation.version_id,
-                    installation.dll_type.value,
-                    installation.backup_id,
-                    installation.status,
-                    installation.installed_at.isoformat(),
-                    datetime.now().isoformat()
+                    installation.version,
+                    install_date.isoformat(),
+                    str(installation.backup_path) if installation.backup_path else None,
+                    str(installation.config_path) if installation.config_path else None,
+                    installation.status
                 ))
                 
                 install_id = cursor.lastrowid
@@ -109,18 +107,18 @@ class InstallationRepository(LoggerMixin):
     def find_by_game(self, game_id: int) -> List[Installation]:
         """
         Busca instalações de um jogo
-        
+
         Args:
             game_id: ID do jogo
-        
+
         Returns:
             Lista de Installation objetos
         """
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM installations 
+            SELECT * FROM installations
             WHERE game_id = ?
-            ORDER BY installed_at DESC
+            ORDER BY install_date DESC
         """, (game_id,))
         
         rows = cursor.fetchall()
@@ -129,18 +127,18 @@ class InstallationRepository(LoggerMixin):
     def find_active_by_game(self, game_id: int) -> Optional[Installation]:
         """
         Busca instalação ativa de um jogo
-        
+
         Args:
             game_id: ID do jogo
-        
+
         Returns:
             Installation objeto ou None
         """
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM installations 
-            WHERE game_id = ? AND status = 'installed'
-            ORDER BY installed_at DESC
+            SELECT * FROM installations
+            WHERE game_id = ? AND status = 'active'
+            ORDER BY install_date DESC
             LIMIT 1
         """, (game_id,))
         
@@ -154,14 +152,14 @@ class InstallationRepository(LoggerMixin):
     def find_all(self) -> List[Installation]:
         """
         Busca todas as instalações
-        
+
         Returns:
             Lista de Installation objetos
         """
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM installations 
-            ORDER BY installed_at DESC
+            SELECT * FROM installations
+            ORDER BY install_date DESC
         """)
         
         rows = cursor.fetchall()
@@ -221,14 +219,14 @@ class InstallationRepository(LoggerMixin):
         Returns:
             Installation objeto
         """
-        installed_at = datetime.fromisoformat(row['installed_at'])
-        
+        install_date = datetime.fromisoformat(row['install_date']) if row['install_date'] else datetime.now()
+
         return Installation(
             id=row['id'],
             game_id=row['game_id'],
-            version_id=row['version_id'],
-            dll_type=DLLType(row['dll_type']),
-            backup_id=row['backup_id'],
-            status=row['status'],
-            installed_at=installed_at
+            version=row['version'],
+            install_date=install_date,
+            backup_path=Path(row['backup_path']) if row['backup_path'] else None,
+            config_path=Path(row['config_path']) if row['config_path'] else None,
+            status=row['status']
         )

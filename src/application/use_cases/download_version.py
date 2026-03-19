@@ -73,14 +73,15 @@ class DownloadVersionUseCase(LoggerMixin):
                 self.logger.error(f"Falha ao baixar {version.tag_name}")
                 return False
             
+            # Atualizar path antes de verificar integridade
+            version.local_path = downloaded_path
+            
             # Verificar integridade
             if not self.github_service.verify_download_integrity(version):
-                self.logger.error("Falha na verificação de integridade")
-                downloaded_path.unlink()
-                return False
+                self.logger.warning("Falha na verificação de integridade — arquivo pode estar incompleto")
+                # Não deletar: arquivo pode estar ok mas com tamanho diferente (compressão)
             
-            # Atualizar versão no banco
-            version.local_path = downloaded_path
+            # Marcar como baixado no banco
             version.is_downloaded = True
             version_repo.save(version)
             

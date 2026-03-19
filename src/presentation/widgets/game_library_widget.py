@@ -14,11 +14,10 @@ from typing import Optional
 
 from utils.logger import LoggerMixin
 from domain.entities.game import Game
-from domain.enums.dll_type import DLLType
 from application.use_cases.scan_games import ScanGamesUseCase
 from application.use_cases.fetch_versions import FetchVersionsUseCase
 from application.use_cases.download_version import DownloadVersionUseCase
-from application.use_cases.install_optiscaler import InstallOptiScalerUseCase
+from application.use_cases.install_optiscaler import InstallOptiScalerUseCase, SUPPORTED_LOADER_DLLS
 from application.use_cases.uninstall_optiscaler import UninstallOptiScalerUseCase
 
 
@@ -159,13 +158,25 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         self.version_combo = QComboBox()
         version_layout.addWidget(self.version_combo)
         install_layout.addLayout(version_layout)
-        
-        # Seletor de DLL alvo
-        dll_target_layout = QHBoxLayout()
-        dll_target_layout.addWidget(QLabel("DLL Alvo:"))
-        self.dll_target_combo = QComboBox()
-        dll_target_layout.addWidget(self.dll_target_combo)
-        install_layout.addLayout(dll_target_layout)
+
+        # Seletor de DLL loader
+        loader_layout = QHBoxLayout()
+        loader_layout.addWidget(QLabel("Loader DLL:"))
+        self.loader_dll_combo = QComboBox()
+        for dll in SUPPORTED_LOADER_DLLS:
+            self.loader_dll_combo.addItem(dll, dll)
+        loader_layout.addWidget(self.loader_dll_combo)
+        install_layout.addLayout(loader_layout)
+
+        # Seletor de FSR4 SDK
+        fsr4_layout = QHBoxLayout()
+        fsr4_layout.addWidget(QLabel("FSR4 SDK:"))
+        self.fsr4_combo = QComboBox()
+        self.fsr4_combo.addItem("Não incluir", None)
+        self.fsr4_combo.addItem("Padrão (3 DLLs)", "standard")
+        self.fsr4_combo.addItem("INT8 (upscaler)", "int8")
+        fsr4_layout.addWidget(self.fsr4_combo)
+        install_layout.addLayout(fsr4_layout)
         
         # Barra de progresso
         self.progress_bar = QProgressBar()
@@ -301,39 +312,41 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         """Instala OptiScaler no jogo"""
         if not self.current_game:
             return
-        
+
         version_id = self.version_combo.currentData()
-        dll_type_str = self.dll_target_combo.currentData()
-        
-        if not version_id or not dll_type_str:
-            QMessageBox.warning(self, "Aviso", "Selecione versão e DLL alvo")
+        loader_dll = self.loader_dll_combo.currentData() or "dxgi.dll"
+        fsr4_variant = self.fsr4_combo.currentData()
+
+        if not version_id:
+            QMessageBox.warning(self, "Aviso", "Selecione uma versão para instalar")
             return
-        
-        dll_type = DLLType(dll_type_str)
-        
+
         reply = QMessageBox.question(
             self,
             "Confirmar Instalação",
-            f"Instalar OptiScaler em {self.current_game.name}?",
+            f"Instalar OptiScaler em {self.current_game.name}?\n"
+            f"Loader: {loader_dll}\n"
+            f"FSR4 SDK: {fsr4_variant or 'Não'}",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
+
         if reply != QMessageBox.StandardButton.Yes:
             return
-        
+
         try:
             success = self.install_uc.execute(
                 self.current_game.id,
                 version_id,
-                dll_type
+                loader_dll=loader_dll,
+                fsr4_variant=fsr4_variant
             )
-            
+
             if success:
                 QMessageBox.information(self, "Sucesso", "Instalação concluída!")
                 self._on_game_selected(self.game_list.currentItem())
             else:
-                QMessageBox.warning(self, "Aviso", "Falha na instalação")
-        
+                QMessageBox.warning(self, "Aviso", "Falha na instalação. Verifique os logs.")
+
         except Exception as e:
             self.logger.error(f"Erro ao instalar: {e}")
             QMessageBox.critical(self, "Erro", f"Falha:\n{e}")
@@ -384,17 +397,11 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             dll_text += f"  {dll_info.size / 1024 / 1024:.1f} MB\n\n"
         
         self.dll_info_text.setText(dll_text if dll_text else "Nenhuma DLL detectada")
-        
-        # Atualizar combo de DLL alvo
-        self.dll_target_combo.clear()
-        for dll_type_str in self.current_game.supported_dlls.keys():
-            dll_type = DLLType(dll_type_str)
-            self.dll_target_combo.addItem(dll_type.display_name, dll_type_str)
-        
+
         # Habilitar botões
-        has_dlls = len(self.current_game.supported_dlls) > 0
-        self.download_btn.setEnabled(has_dlls)
-        self.install_btn.setEnabled(has_dlls)
+        has_versions = self.version_combo.count() > 0
+        self.download_btn.setEnabled(True)
+        self.install_btn.setEnabled(has_versions)
     
     def _refresh_game_list(self):
         """Atualiza lista de jogos"""
