@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# PyQt
+*.ui~
+*.qrc~
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Application specific
+data/games.db
+data/games.db-journal
+data/backups/
+resources/optiscaler_cache/
+*.log
+logs/
+
+# Config (exceto exemplos)
+data/config.yaml
+!data/config.example.yaml
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build artifacts
+*.spec
+build/
+dist/
+
+# Temporary files
+*.tmp
+*.bak
+.~lock.*
