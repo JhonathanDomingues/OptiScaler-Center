@@ -173,12 +173,6 @@ class GameCardWidget(QFrame):
             except Exception as e:
                 print(f"Erro ao carregar imagem de {image_path}: {e}")
         
-        # Debug: mostrar por que não carregou
-        if self.game.appid:
-            print(f"Imagem não encontrada para {self.game.name} (AppID: {self.game.appid})")
-        else:
-            print(f"Imagem não encontrada para {self.game.name} (sem AppID)")
-        
         # Criar placeholder
         self._create_placeholder()
     
@@ -217,11 +211,37 @@ class GameCardWidget(QFrame):
             # Nova estrutura: diretório por AppID com subdiretórios hash
             appid_dir = cache_dir / str(self.game.appid)
             if appid_dir.exists():
-                # Priorizar library_capsule (300x450 - vertical perfeito)
-                for img_name in ['library_capsule.jpg', 'portrait.png', 'library_hero.jpg', 'library_header.jpg', 'logo.png']:
+                # Buscar cada tipo de imagem em ordem de prioridade (vertical primeiro)
+                # library_capsule.jpg é SEMPRE vertical (300x450) - prioridade máxima
+                capsule_images = list(appid_dir.rglob('library_capsule.jpg'))
+                if capsule_images:
+                    return capsule_images[0]
+                
+                # portrait.png também é vertical
+                portrait_images = list(appid_dir.rglob('portrait.png'))
+                if portrait_images:
+                    return portrait_images[0]
+                
+                # Verificar dimensões das outras imagens para preferir verticais
+                for img_name in ['library_hero.jpg', 'library_header.jpg', 'logo.png']:
                     found_images = list(appid_dir.rglob(img_name))
                     if found_images:
-                        return found_images[0]
+                        # Verificar se é vertical ou pelo menos não muito horizontal
+                        img_path = found_images[0]
+                        try:
+                            test_pixmap = QPixmap(str(img_path))
+                            if not test_pixmap.isNull():
+                                width = test_pixmap.width()
+                                height = test_pixmap.height()
+                                # Aceitar imagens verticais (altura >= largura)
+                                # OU imagens não muito horizontais (largura <= 2.5x altura)
+                                # Isso aceita 640x360, 1920x1080 mas rejeita 1920x620
+                                if height >= width or width <= (height * 2.5):
+                                    return img_path
+                        except:
+                            pass
+                
+                # Se não encontrou nenhuma adequada, usar placeholder ao invés de horizontal
             
             # Estrutura antiga: arquivos diretos com padrão appid_tipo.jpg
             for img_pattern in [
