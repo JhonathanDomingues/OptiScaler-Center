@@ -1,6 +1,7 @@
 """
 Constantes globais do OptiScaler Center
 """
+import os
 import sys
 from pathlib import Path
 
@@ -12,26 +13,32 @@ APP_DESCRIPTION = "Gerenciador visual para instalação do OptiScaler"
 
 # Detectar se está rodando como executável PyInstaller
 if getattr(sys, 'frozen', False):
-    # Rodando como executável empacotado
-    # BASE_DIR deve ser o diretório onde o executável está
+    # Rodando como executável empacotado (PyInstaller / AppImage)
+    # O executável pode estar num filesystem somente-leitura (AppImage),
+    # por isso dados graváveis ficam em ~/.local/share/optiscaler-center/
     BASE_DIR = Path(sys.executable).parent
     SRC_DIR = BASE_DIR  # No executável, tudo está no mesmo nível
+    _xdg_data = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    USER_DATA_DIR = _xdg_data / "optiscaler-center"
 else:
     # Rodando como script Python normal
     BASE_DIR = Path(__file__).parent.parent.parent
     SRC_DIR = Path(__file__).parent.parent
+    USER_DATA_DIR = BASE_DIR
 
 # Paths base
-DATA_DIR = BASE_DIR / "data"
 RESOURCES_DIR = BASE_DIR / "resources"
-LOGS_DIR = BASE_DIR / "logs"
+
+# Paths graváveis (usam USER_DATA_DIR quando empacotado)
+DATA_DIR = USER_DATA_DIR / "data"
+LOGS_DIR = USER_DATA_DIR / "logs"
 
 # Paths específicos
 DATABASE_PATH = DATA_DIR / "games.db"
 CONFIG_PATH = DATA_DIR / "config.yaml"
 BACKUPS_DIR = DATA_DIR / "backups"
-CACHE_DIR = RESOURCES_DIR / "optiscaler_cache"
-FSR4_SDK_DIR = RESOURCES_DIR / "fsr4_sdk"
+CACHE_DIR = USER_DATA_DIR / "optiscaler_cache"  # gravável
+FSR4_SDK_DIR = RESOURCES_DIR / "fsr4_sdk"       # somente-leitura (bundled)
 
 # URLs
 OPTISCALER_REPO = "optiscaler/OptiScaler"
