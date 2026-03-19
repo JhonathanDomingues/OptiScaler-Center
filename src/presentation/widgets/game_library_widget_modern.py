@@ -161,8 +161,10 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             if item.widget():
                 item.widget().deleteLater()
         
-        # Adicionar cards
-        columns = max(1, self.grid_container.width() // 295)  # 280 + 15 spacing
+        # Adicionar cards com cálculo responsivo
+        # 280 (largura card) + 15 (spacing) = 295px por card
+        available_width = self.grid_container.width()
+        columns = max(1, available_width // 295)
         
         for idx, game in enumerate(self.filtered_games):
             row = idx // columns
@@ -178,6 +180,28 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         
         # Atualizar contador
         self.game_count_label.setText(f"{len(self.filtered_games)} jogos")
+    
+    def resizeEvent(self, event):
+        """Reorganiza grid quando janela é redimensionada"""
+        super().resizeEvent(event)
+        
+        # Recalcular e reorganizar grid após pequeno delay para evitar múltiplas reorganizações
+        if hasattr(self, 'filtered_games') and self.filtered_games:
+            # Limpar layout atual
+            for i in reversed(range(self.grid_layout.count())):
+                item = self.grid_layout.itemAt(i)
+                if item and item.widget():
+                    self.grid_layout.removeItem(item)
+            
+            # Recalcular colunas baseado na nova largura
+            available_width = self.grid_container.width()
+            columns = max(1, available_width // 295)  # 280 (card) + 15 (spacing)
+            
+            # Reorganizar cards no grid
+            for idx, card in enumerate(self.game_cards):
+                row = idx // columns
+                col = idx % columns
+                self.grid_layout.addWidget(card, row, col)
     
     def _scan_games(self):
         """Varre jogos Steam"""
@@ -341,8 +365,9 @@ class GameLibraryWidget(QWidget, LoggerMixin):
     def resizeEvent(self, event):
         """Reorganiza grid ao redimensionar"""
         super().resizeEvent(event)
-        # Opcional: reorganizar grid dinamicamente
-        # self._refresh_grid()
+        # Reorganizar grid dinamicamente para layout responsivo
+        if hasattr(self, 'game_cards') and self.game_cards:
+            self._refresh_grid()
 
 
 class GameDetailsDialog(QDialog):

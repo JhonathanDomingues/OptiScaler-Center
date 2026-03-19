@@ -4,12 +4,13 @@ Card individual para exibição em grid, estilo Steam
 """
 from PyQt6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QWidget, QMenu
+    QWidget, QMenu, QFileDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen, QCursor
 from pathlib import Path
 from typing import Optional
+import shutil
 
 from domain.entities.game import Game
 from domain.enums.installation_status import InstallationStatus
@@ -23,6 +24,8 @@ class GameCardWidget(QFrame):
     clicked = pyqtSignal(Game)
     install_requested = pyqtSignal(Game)
     uninstall_requested = pyqtSignal(Game)
+    configure_requested = pyqtSignal(Game)
+    change_image_requested = pyqtSignal(Game)
     
     def __init__(self, game: Game, parent=None):
         super().__init__(parent)
@@ -140,26 +143,59 @@ class GameCardWidget(QFrame):
         image_path = self._get_steam_grid_image()
         
         if image_path and image_path.exists():
-            pixmap = QPixmap(str(image_path))
-            self.image_label.setPixmap(pixmap)
+            try:
+                pixmap = QPixmap(str(image_path))
+                if not pixmap.isNull():
+                    # Redimensionar mantendo proporção
+                    pixmap = pixmap.scaled(
+                        280, 135,
+                        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+                    self.image_label.setPixmap(pixmap)
+                    return
+            except Exception as e:
+                print(f"Erro ao carregar imagem de {image_path}: {e}")
+        
+        # Debug: mostrar por que não carregou
+        if self.game.appid:
+            print(f"Imagem não encontrada para {self.game.name} (AppID: {self.game.appid})")
         else:
-            # Criar placeholder
-            self._create_placeholder()
+            print(f"Imagem não encontrada para {self.game.name} (sem AppID)")
+        
+        # Criar placeholder
+        self._create_placeholder()
     
     def _get_steam_grid_image(self) -> Optional[Path]:
         """Obtém caminho da imagem grid do Steam"""
         if not self.game.appid:
             return None
         
-        # Padrão: Steam/appcache/librarycache/{appid}_library_600x900.jpg
-        # Também tentar: Steam/appcache/librarycache/{appid}_header.jpg
+        # Verificar cache customizado primeiro
+        custom_image = self._get_custom_image_path()
+        if custom_image and custom_image.exists():
+            return custom_image
         
+        # Padrões Steam: library_600x900, hero, header
+        # Linux paths
         possible_paths = [
-            Path.home() / ".steam" / "steam" / "appcache" / "librarycache" / f"{self.game.appid}_library_600x900.jpg",
             Path.home() / ".local" / "share" / "Steam" / "appcache" / "librarycache" / f"{self.game.appid}_library_600x900.jpg",
-            Path.home() / ".steam" / "steam" / "appcache" / "librarycache" / f"{self.game.appid}_header.jpg",
+            Path.home() / ".steam" / "steam" / "appcache" / "librarycache" / f"{self.game.appid}_library_600x900.jpg",
+            Path.home() / ".local" / "share" / "Steam" / "appcache" / "librarycache" / f"{self.game.appid}_library_hero.jpg",
             Path.home() / ".local" / "share" / "Steam" / "appcache" / "librarycache" / f"{self.game.appid}_header.jpg",
         ]
+        
+        # Windows paths
+        import platform
+        if platform.system() == "Windows":
+            import os
+            program_files = os.environ.get('ProgramFiles(x86)', 'C:\\Program Files (x86)')
+            steam_path = Path(program_files) / "Steam"
+            possible_paths.extend([
+                steam_path / "appcache" / "librarycache" / f"{self.game.appid}_library_600x900.jpg",
+                steam_path / "appcache" / "librarycache" / f"{self.game.appid}_library_hero.jpg",
+                steam_path / "appcache" / "librarycache" / f"{self.game.appid}_header.jpg",
+            ])
         
         for path in possible_paths:
             if path.exists():
@@ -168,11 +204,10 @@ class GameCardWidget(QFrame):
         return None
     
     def _create_placeholder(self):
-        """Cria imagem placeholder"""
+        """Cria imagem placeholder com ícone de controle"""
         pixmap = QPixmap(280, 135)
         pixmap.fill(QColor("#0e1419"))
         
-        # Desenhar ícone de jogo
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
@@ -180,18 +215,41 @@ class GameCardWidget(QFrame):
         pen = QPen(QColor("#2a475e"))
         pen.setWidth(2)
         painter.setPen(pen)
-        painter.drawRect(0, 0, 280, 135)
+        painter.drawRect(1, 1, 278, 133)
         
-        # Desenhar texto
+        # Desenhar ícone de controle simplificado
+        painter.setPen(QPen(QColor("#4c5f6b"), 3))
+        painter.setBrush(QColor("#1b2838"))
+        
+        # Corpo do controle (retângulo arredondado)
+        from PyQt6.QtCore import QRect
+        painter.drawRoundedRect(QRect(80, 45, 120, 50), 15, 15)
+        
+        # D-pad (esquerda)
+        painter.drawRect(95, 60, 12, 20)
+        painter.drawRect(89, 66, 24, 8)
+        
+        # Botões (direita)
+        painter.drawEllipse(155, 60, 12, 12)
+        painter.drawEllipse(165, 70, 12, 12)
+        painter.drawEllipse(145, 70, 12, 12)
+        painter.drawEllipse(155, 80, 12, 12)
+        
+        # Nome do jogo
         painter.setPen(QColor("#8f98a0"))
+        from PyQt6.QtGui import QFont
+        font = QFont()
+        font.setPixelSize(12)
+        painter.setFont(font)
+        
+        game_name = self.game.name[:35] + ("..." if len(self.game.name) > 35 else "")
         painter.drawText(
-            pixmap.rect(),
+            QRect(10, 100, 260, 30),
             Qt.AlignmentFlag.AlignCenter,
-            "🎮\n" + self.game.name[:30] + ("..." if len(self.game.name) > 30 else "")
+            game_name
         )
         
         painter.end()
-        
         self.image_label.setPixmap(pixmap)
     
     def mousePressEvent(self, event):
@@ -211,6 +269,9 @@ class GameCardWidget(QFrame):
         install_action = menu.addAction("⚙ Instalar OptiScaler")
         uninstall_action = menu.addAction("✗ Desinstalar OptiScaler")
         menu.addSeparator()
+        configure_action = menu.addAction("⚙️ Configurações")
+        change_image_action = menu.addAction("🖼️ Alterar Imagem")
+        menu.addSeparator()
         info_action = menu.addAction("ℹ Ver Detalhes")
         
         # Habilitar/desabilitar baseado no estado
@@ -225,7 +286,80 @@ class GameCardWidget(QFrame):
         # Conectar ações
         install_action.triggered.connect(lambda: self.install_requested.emit(self.game))
         uninstall_action.triggered.connect(lambda: self.uninstall_requested.emit(self.game))
+        configure_action.triggered.connect(lambda: self.configure_requested.emit(self.game))
+        change_image_action.triggered.connect(lambda: self._change_image())
         info_action.triggered.connect(lambda: self.clicked.emit(self.game))
         
         # Mostrar menu
         menu.exec(self.mapToGlobal(pos))
+    
+    def _get_custom_image_path(self) -> Optional[Path]:
+        """Obtém caminho da imagem customizada"""
+        # Cache de imagens customizadas em resources/game_images/
+        from utils.constants import RESOURCES_DIR
+        
+        custom_images_dir = RESOURCES_DIR / "game_images"
+        
+        # Tentar por appid primeiro, depois por nome do jogo
+        if self.game.appid:
+            custom_path = custom_images_dir / f"{self.game.appid}.jpg"
+            if custom_path.exists():
+                return custom_path
+            custom_path = custom_images_dir / f"{self.game.appid}.png"
+            if custom_path.exists():
+                return custom_path
+        
+        # Tentar por nome (sanitizado)
+        safe_name = "".join(c for c in self.game.name if c.isalnum() or c in (' ', '-', '_')).strip()
+        custom_path = custom_images_dir / f"{safe_name}.jpg"
+        if custom_path.exists():
+            return custom_path
+        custom_path = custom_images_dir / f"{safe_name}.png"
+        if custom_path.exists():
+            return custom_path
+        
+        return None
+    
+    def _change_image(self):
+        """Abre diálogo para selecionar nova imagem"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Selecionar Imagem do Jogo",
+            str(Path.home()),
+            "Imagens (*.png *.jpg *.jpeg *.bmp);;Todos os arquivos (*)"
+        )
+        
+        if file_path:
+            self.set_custom_image(Path(file_path))
+    
+    def set_custom_image(self, image_path: Path):
+        """Define imagem customizada para o jogo"""
+        try:
+            from utils.constants import RESOURCES_DIR
+            
+            # Criar diretório se não existir
+            custom_images_dir = RESOURCES_DIR / "game_images"
+            custom_images_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Determinar nome do arquivo
+            if self.game.appid:
+                target_name = f"{self.game.appid}{image_path.suffix}"
+            else:
+                safe_name = "".join(c for c in self.game.name if c.isalnum() or c in (' ', '-', '_')).strip()
+                target_name = f"{safe_name}{image_path.suffix}"
+            
+            target_path = custom_images_dir / target_name
+            
+            # Copiar imagem
+            shutil.copy2(image_path, target_path)
+            
+            # Recarregar imagem
+            self._load_game_image()
+            
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Erro",
+                f"Falha ao definir imagem:\n{e}"
+            )
