@@ -84,7 +84,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install pyinstaller Pillow
       
       - name: Build with PyInstaller
         run: |
@@ -115,16 +115,27 @@ jobs:
           cp optiscaler-center.desktop AppDir/usr/share/applications/
           cp optiscaler-center.desktop AppDir/
           
-          # Criar ícone simples (PNG de placeholder)
-          # Para produção, substitua por um ícone real
-          convert -size 256x256 xc:transparent \
-            -fill '#1b2838' -draw 'roundrectangle 20,20 236,236 20,20' \
-            -fill '#5c7e10' -draw 'circle 128,128 128,88' \
-            AppDir/usr/share/icons/hicolor/256x256/apps/optiscaler-center.png || \
-          echo "ImageMagick não disponível, usando ícone padrão"
+          # Criar ícone usando Python
+          python3 << 'PYTHON_SCRIPT'
+          from PIL import Image, ImageDraw
+          
+          # Criar imagem 256x256
+          img = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
+          draw = ImageDraw.Draw(img)
+          
+          # Fundo escuro arredondado
+          draw.rounded_rectangle([(20, 20), (236, 236)], radius=20, fill='#1b2838')
+          
+          # Círculo verde (ícone simples)
+          draw.ellipse([(88, 88), (168, 168)], fill='#5c7e10')
+          
+          # Salvar ícone
+          img.save('AppDir/usr/share/icons/hicolor/256x256/apps/optiscaler-center.png')
+          print("Ícone criado com sucesso!")
+          PYTHON_SCRIPT
           
           # Criar link simbólico para ícone
-          ln -sf usr/share/icons/hicolor/256x256/apps/optiscaler-center.png AppDir/optiscaler-center.png || true
+          ln -sf usr/share/icons/hicolor/256x256/apps/optiscaler-center.png AppDir/optiscaler-center.png
           
           # Criar AppRun script
           cat > AppDir/AppRun << 'EOF'
