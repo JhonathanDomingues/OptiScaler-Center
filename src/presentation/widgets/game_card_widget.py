@@ -38,8 +38,8 @@ class GameCardWidget(QFrame):
         # Aplicar estilo
         self.setStyleSheet(GAME_CARD_STYLE)
         
-        # Tamanho do card
-        self.setFixedSize(280, 380)
+        # Tamanho do card - ajustado para formato vertical
+        self.setFixedSize(200, 320)
         
         self._init_ui()
     
@@ -49,11 +49,11 @@ class GameCardWidget(QFrame):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Imagem do jogo
+        # Imagem do jogo - formato vertical
         self.image_label = QLabel()
         self.image_label.setObjectName("gameImage")
-        self.image_label.setFixedSize(280, 135)
-        self.image_label.setScaledContents(True)
+        self.image_label.setFixedSize(200, 300)
+        self.image_label.setScaledContents(False)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # Carregar imagem ou placeholder
@@ -146,12 +146,18 @@ class GameCardWidget(QFrame):
             try:
                 pixmap = QPixmap(str(image_path))
                 if not pixmap.isNull():
-                    # Redimensionar mantendo proporção
+                    # Redimensionar mantendo proporção para preencher o card
                     pixmap = pixmap.scaled(
-                        280, 135,
+                        200, 300,
                         Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                         Qt.TransformationMode.SmoothTransformation
                     )
+                    # Centralizar crop se necessário
+                    if pixmap.width() > 200 or pixmap.height() > 300:
+                        x_offset = (pixmap.width() - 200) // 2
+                        y_offset = (pixmap.height() - 300) // 2
+                        pixmap = pixmap.copy(x_offset, y_offset, 200, 300)
+                    
                     self.image_label.setPixmap(pixmap)
                     return
             except Exception as e:
@@ -177,7 +183,6 @@ class GameCardWidget(QFrame):
             return custom_image
         
         import platform
-        import glob
         
         # Diretórios base do Steam
         steam_cache_dirs = []
@@ -202,8 +207,8 @@ class GameCardWidget(QFrame):
             # Nova estrutura: diretório por AppID com subdiretórios hash
             appid_dir = cache_dir / str(self.game.appid)
             if appid_dir.exists():
-                # Procurar por imagens dentro dos subdiretórios
-                for img_name in ['library_hero.jpg', 'library_capsule.jpg', 'library_header.jpg', 'portrait.png', 'logo.png']:
+                # Priorizar library_capsule (300x450 - vertical perfeito)
+                for img_name in ['library_capsule.jpg', 'portrait.png', 'library_hero.jpg', 'library_header.jpg', 'logo.png']:
                     found_images = list(appid_dir.rglob(img_name))
                     if found_images:
                         return found_images[0]
@@ -222,7 +227,7 @@ class GameCardWidget(QFrame):
     
     def _create_placeholder(self):
         """Cria imagem placeholder"""
-        pixmap = QPixmap(280, 135)
+        pixmap = QPixmap(200, 300)
         pixmap.fill(QColor("#0e1419"))
         
         painter = QPainter(pixmap)
@@ -232,7 +237,7 @@ class GameCardWidget(QFrame):
         pen = QPen(QColor("#2a475e"))
         pen.setWidth(2)
         painter.setPen(pen)
-        painter.drawRect(1, 1, 278, 133)
+        painter.drawRect(1, 1, 198, 298)
         
         # Desenhar texto com nome do jogo
         painter.setPen(QColor("#8f98a0"))
@@ -246,7 +251,7 @@ class GameCardWidget(QFrame):
         
         game_name = self.game.name[:40] + ("..." if len(self.game.name) > 40 else "")
         painter.drawText(
-            QRect(10, 10, 260, 115),
+            QRect(10, 10, 180, 280),
             Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
             game_name
         )
