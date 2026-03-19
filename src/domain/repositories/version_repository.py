@@ -7,6 +7,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from utils.logger import LoggerMixin
+from utils.constants import CACHE_DIR
 from domain.entities.optiscaler_version import OptiScalerVersion
 
 
@@ -273,6 +274,21 @@ class VersionRepository(LoggerMixin):
             is_prerelease=bool(row['is_prerelease']),
             download_url=row['download_url'] or "",
             total_size=row['file_size'] or 0,
-            cache_path=Path(row['local_path']) if row['local_path'] else None,
+            cache_path=self._resolve_cache_path(row['local_path']),
             is_downloaded=bool(row['is_downloaded'])
         )
+
+    def _resolve_cache_path(self, raw_path: Optional[str]) -> Optional[Path]:
+        """Resolve local_path do banco para caminho absoluto."""
+        if not raw_path:
+            return None
+        p = Path(raw_path)
+        if p.is_absolute():
+            return p
+        # Caminho relativo: resolver em relação ao CACHE_DIR (ou raiz do projeto)
+        candidate = CACHE_DIR / p.name
+        if candidate.exists():
+            return candidate
+        # Fallback: resolver relativo à raiz do projeto
+        from utils.constants import BASE_DIR
+        return (BASE_DIR / p).resolve()

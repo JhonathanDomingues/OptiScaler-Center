@@ -14,12 +14,11 @@ from typing import Optional, List
 
 from utils.logger import LoggerMixin
 from domain.entities.game import Game
-from domain.enums.dll_type import DLLType
 from domain.enums.installation_status import InstallationStatus
 from application.use_cases.scan_games import ScanGamesUseCase
 from application.use_cases.fetch_versions import FetchVersionsUseCase
 from application.use_cases.download_version import DownloadVersionUseCase
-from application.use_cases.install_optiscaler import InstallOptiScalerUseCase
+from application.use_cases.install_optiscaler import InstallOptiScalerUseCase, SUPPORTED_LOADER_DLLS
 from application.use_cases.uninstall_optiscaler import UninstallOptiScalerUseCase
 from presentation.widgets.game_card_widget import GameCardWidget
 from presentation.styles.modern_theme import MODERN_THEME
@@ -351,10 +350,11 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         dialog = InstallDialog(game, self.fetch_versions_uc, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             version_id = dialog.selected_version_id
-            dll_type = dialog.selected_dll_type
-            
-            if version_id and dll_type:
-                self._install_optiscaler(game, version_id, dll_type)
+            loader_dll = dialog.selected_loader
+            fsr4_variant = dialog.selected_fsr4
+
+            if version_id:
+                self._install_optiscaler(game, version_id, loader_dll, fsr4_variant)
     
     def _on_uninstall_requested(self, game: Game):
         """Callback quando desinstalação é solicitada"""
@@ -370,13 +370,14 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         if reply == QMessageBox.StandardButton.Yes:
             self._uninstall_optiscaler(game)
     
-    def _install_optiscaler(self, game: Game, version_id: int, dll_type: DLLType):
+    def _install_optiscaler(self, game: Game, version_id: int, loader_dll: str = "dxgi.dll", fsr4_variant=None):
         """Instala OptiScaler no jogo"""
-        progress = QProgressBar()
-        progress.setRange(0, 0)  # Indeterminado
-        
         try:
-            success = self.install_uc.execute(game.id, version_id, dll_type)
+            success = self.install_uc.execute(
+                game.id, version_id,
+                loader_dll=loader_dll,
+                fsr4_variant=fsr4_variant
+            )
             
             if success:
                 QMessageBox.information(
@@ -475,37 +476,46 @@ class GameDetailsDialog(QDialog):
 
 class InstallDialog(QDialog):
     """Diálogo de instalação do OptiScaler"""
-    
+
     def __init__(self, game: Game, fetch_versions_uc, parent=None):
         super().__init__(parent)
         self.game = game
         self.fetch_versions_uc = fetch_versions_uc
-        
+
         self.selected_version_id = None
-        self.selected_dll_type = None
-        
+        self.selected_loader = "dxgi.dll"
+        self.selected_fsr4 = None
+
         self.setWindowTitle(f"Instalar OptiScaler: {game.name}")
-        self.setMinimumWidth(400)
-        
+        self.setMinimumWidth(420)
+
         self._init_ui()
         self._load_versions()
-    
+
     def _init_ui(self):
         """Inicializa interface"""
         layout = QVBoxLayout()
-        
+
         # Seletor de versão
-        layout.addWidget(QLabel("Selecione a versão do OptiScaler:"))
+        layout.addWidget(QLabel("Versão do OptiScaler:"))
         self.version_combo = QComboBox()
         layout.addWidget(self.version_combo)
-        
-        # Seletor de DLL alvo
-        layout.addWidget(QLabel("Selecione a DLL alvo:"))
-        self.dll_combo = QComboBox()
-        for dll_type_str, dll_info in self.game.supported_dlls.items():
-            self.dll_combo.addItem(dll_info.dll_type.display_name, dll_type_str)
-        layout.addWidget(self.dll_combo)
-        
+
+        # Seletor de loader DLL
+        layout.addWidget(QLabel("Loader DLL (nome que o OptiScaler vai usar):"))
+        self.loader_combo = QComboBox()
+        for dll in SUPPORTED_LOADER_DLLS:
+            self.loader_combo.addItem(dll, dll)
+        layout.addWidget(self.loader_combo)
+
+        # Seletor de FSR4 SDK
+        layout.addWidget(QLabel("FSR4 SDK (opcional):"))
+        self.fsr4_combo = QComboBox()
+        self.fsr4_combo.addItem("Não incluir", None)
+        self.fsr4_combo.addItem("Padrão — 3 DLLs (amd_fidelityfx_*.dll)", "standard")
+        self.fsr4_combo.addItem("INT8 — apenas upscaler", "int8")
+        layout.addWidget(self.fsr4_combo)
+
         # Botões
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -513,25 +523,23 @@ class InstallDialog(QDialog):
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-        
+
         self.setLayout(layout)
-    
+
     def _load_versions(self):
         """Carrega versões disponíveis"""
         try:
             versions = self.fetch_versions_uc.get_downloaded_versions()
-            
+
             for version in versions:
                 self.version_combo.addItem(version.tag_name, version.id)
         except Exception as e:
             QMessageBox.warning(self, "Aviso", f"Erro ao carregar versões:\n{e}")
-    
+
     def _on_accept(self):
         """Confirma seleção"""
         self.selected_version_id = self.version_combo.currentData()
-        dll_type_str = self.dll_combo.currentData()
-        
-        if dll_type_str:
-            self.selected_dll_type = DLLType(dll_type_str)
-        
+        self.selected_loader = self.loader_combo.currentData() or "dxgi.dll"
+        self.selected_fsr4 = self.fsr4_combo.currentData()
+
         self.accept()

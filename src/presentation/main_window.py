@@ -25,7 +25,7 @@ from presentation.widgets.downloads_manager_widget import DownloadsManagerWidget
 from presentation.styles.modern_theme import apply_modern_theme, MODERN_THEME
 from presentation.resources.app_icon import create_app_icon
 from utils.logger import LoggerMixin
-from utils.constants import APP_NAME, APP_VERSION
+from utils.constants import APP_NAME, APP_VERSION, CACHE_DIR, BACKUPS_DIR
 
 
 class MainWindow(QMainWindow, LoggerMixin):
@@ -43,23 +43,19 @@ class MainWindow(QMainWindow, LoggerMixin):
     
     def _init_services(self):
         """Inicializa todos os serviços e use cases"""
-        # Diretórios
-        cache_dir = Path("resources/optiscaler_cache")
-        backup_dir = Path("backups")
-        
         # Serviços de infraestrutura
         self.steam_service = SteamService()
-        self.github_service = GitHubService(cache_dir)
-        
+        self.github_service = GitHubService(CACHE_DIR)
+
         # Serviços de aplicação
         self.dll_analyzer = DLLAnalyzer(max_depth=3)
         self.game_scanner = GameScanner(self.steam_service, self.dll_analyzer)
-        
+
         # Use Cases
         self.scan_games_uc = ScanGamesUseCase(self.game_scanner, self.database)
         self.fetch_versions_uc = FetchVersionsUseCase(self.github_service, self.database)
         self.download_version_uc = DownloadVersionUseCase(self.github_service, self.database)
-        self.install_uc = InstallOptiScalerUseCase(self.database, backup_dir)
+        self.install_uc = InstallOptiScalerUseCase(self.database, BACKUPS_DIR)
         self.uninstall_uc = UninstallOptiScalerUseCase(self.database)
     
     def _setup_ui(self):

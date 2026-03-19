@@ -3,9 +3,16 @@ Use Case: Instalar OptiScaler em um jogo
 """
 import shutil
 import tempfile
+import json
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
+
+try:
+    import libarchive
+    HAS_LIBARCHIVE = True
+except ImportError:
+    HAS_LIBARCHIVE = False
 
 try:
     import py7zr
@@ -76,9 +83,9 @@ class InstallOptiScalerUseCase(LoggerMixin):
         Returns:
             True se sucesso, False caso contrário
         """
-        if not HAS_PY7ZR:
+        if not HAS_LIBARCHIVE and not HAS_PY7ZR:
             self.logger.error(
-                "py7zr não está instalado. Execute: pip install py7zr"
+                "Nenhum extrator disponível. Execute: pip install libarchive-c"
             )
             return False
 
@@ -140,7 +147,7 @@ class InstallOptiScalerUseCase(LoggerMixin):
                     # 3. Copiar arquivos para o jogo
                     self.logger.info("[3/4] Copiando arquivos...")
                     try:
-                        self._copy_files_to_game(tmp_dir, files_to_copy, game_dir, loader_dll)
+                        installed_names = self._copy_files_to_game(tmp_dir, files_to_copy, game_dir, loader_dll)
                     except Exception as copy_err:
                         self.logger.error(f"Erro ao copiar arquivos: {copy_err}")
                         self._restore_backup(backup, game_dir)
@@ -148,7 +155,11 @@ class InstallOptiScalerUseCase(LoggerMixin):
 
                     # Copiar FSR4 SDK se solicitado
                     if fsr4_variant:
-                        self._copy_fsr4_sdk(game_dir, fsr4_variant)
+                        fsr4_names = self._copy_fsr4_sdk(game_dir, fsr4_variant)
+                        installed_names.extend(fsr4_names)
+
+                    # Salvar manifesto dos arquivos instalados no backup
+                    self._save_manifest(backup.backup_path, installed_names, loader_dll)
 
                     self.logger.info("✓ Arquivos instalados")
 
@@ -177,9 +188,34 @@ class InstallOptiScalerUseCase(LoggerMixin):
     # ------------------------------------------------------------------
 
     def _extract_7z(self, archive_path: Path, dest_dir: Path):
-        """Extrai o arquivo .7z para dest_dir."""
-        with py7zr.SevenZipFile(archive_path, mode='r') as z:
-            z.extractall(path=dest_dir)
+        """Extrai o arquivo .7z para dest_dir.
+        
+        Usa libarchive (suporta BCJ2) como primário, py7zr como fallback.
+        """
+        if HAS_LIBARCHIVE:
+            self._extract_with_libarchive(archive_path, dest_dir)
+        elif HAS_PY7ZR:
+            self.logger.warning("Usando py7zr — pode falhar com filtro BCJ2")
+            with py7zr.SevenZipFile(archive_path, mode='r') as z:
+                z.extractall(path=dest_dir)
+        else:
+            raise RuntimeError("Nenhum extrator disponível")
+
+    def _extract_with_libarchive(self, archive_path: Path, dest_dir: Path):
+        """Extrai usando libarchive (suporta todos os filtros do 7-zip)."""
+        import libarchive
+        with libarchive.file_reader(str(archive_path)) as archive:
+            for entry in archive:
+                # Ignorar entradas de diretório
+                if entry.isdir:
+                    dest = dest_dir / entry.pathname
+                    dest.mkdir(parents=True, exist_ok=True)
+                    continue
+                dest = dest_dir / entry.pathname
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with open(dest, 'wb') as f:
+                    for block in entry.get_blocks():
+                        f.write(block)
 
     def _collect_files(self, tmp_dir: Path) -> list:
         """Coleta arquivos relevantes do diretório extraído (DLL, INI, JSON)."""
@@ -235,31 +271,46 @@ class InstallOptiScalerUseCase(LoggerMixin):
         files_to_copy: list,
         game_dir: Path,
         loader_dll: str
-    ):
+    ) -> list:
         """
         Copia os arquivos extraídos para o diretório do jogo.
         Renomeia 'OptiScaler.dll' para o nome loader escolhido.
+        Retorna lista de nomes de arquivos instalados.
         """
+        installed = []
         for src in files_to_copy:
             dest_name = src.name
             if src.name.lower() == 'optiscaler.dll':
                 dest_name = loader_dll
             dest = game_dir / dest_name
             shutil.copy2(src, dest)
+            installed.append(dest_name)
             self.logger.debug(f"  Copiado: {dest_name}")
+        return installed
 
-    def _copy_fsr4_sdk(self, game_dir: Path, variant: str):
-        """Copia os arquivos do FSR4 SDK para o diretório do jogo."""
+    def _copy_fsr4_sdk(self, game_dir: Path, variant: str) -> list:
+        """Copia os arquivos do FSR4 SDK para o diretório do jogo. Retorna nomes copiados."""
         sdk_dir = FSR4_VARIANTS.get(variant)
         if not sdk_dir or not sdk_dir.exists():
             self.logger.warning(f"FSR4 SDK '{variant}' não encontrado em {sdk_dir}")
-            return
-        count = 0
+            return []
+        installed = []
         for dll in sdk_dir.glob('*.dll'):
             shutil.copy2(dll, game_dir / dll.name)
+            installed.append(dll.name)
             self.logger.debug(f"  FSR4 SDK: {dll.name}")
-            count += 1
-        self.logger.info(f"✓ {count} arquivo(s) FSR4 SDK ({variant}) copiado(s)")
+        self.logger.info(f"✓ {len(installed)} arquivo(s) FSR4 SDK ({variant}) copiado(s)")
+        return installed
+
+    def _save_manifest(self, backup_dir: Path, installed_names: list, loader_dll: str):
+        """Salva manifesto JSON com lista de arquivos instalados."""
+        manifest = {
+            "loader_dll": loader_dll,
+            "installed_files": installed_names
+        }
+        (backup_dir / "optiscaler_manifest.json").write_text(
+            json.dumps(manifest, indent=2), encoding='utf-8'
+        )
 
     def _restore_backup(self, backup: Backup, game_dir: Path):
         """Restaura arquivos do backup em caso de erro."""

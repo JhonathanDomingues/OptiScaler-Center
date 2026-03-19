@@ -233,8 +233,9 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
                 sender.setText("⏳ Buscando...")
             
             # Buscar versões
-            count = self.fetch_versions_uc.execute(include_prerelease=True)
-            
+            versions = self.fetch_versions_uc.execute(include_prerelease=True)
+            count = len(versions)
+
             if count > 0:
                 self.logger.info(f"✓ {count} versões encontradas")
                 self._load_versions()
@@ -420,7 +421,7 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
                     
                     with self.db_service.get_connection() as conn:
                         version_repo = VersionRepository(conn)
-                        version_repo.update(version)
+                        version_repo.save(version)
                     
                     self._load_versions()
                     QMessageBox.information(
@@ -462,7 +463,7 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
                             
                             version.is_downloaded = False
                             version.local_path = None
-                            version_repo.update(version)
+                            version_repo.save(version)
                 
                 self.logger.info(f"✓ {removed} versões removidas do cache")
                 self._load_versions()
