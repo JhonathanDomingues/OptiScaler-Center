@@ -45,9 +45,10 @@ htmlcov/
 .tox/
 
 # Build artifacts
-*.spec
 build/
 dist/
+*.zip
+*.tar.gz
 
 # Temporary files
 *.tmp
