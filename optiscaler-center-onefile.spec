@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for OptiScaler Center
+PyInstaller spec file for OptiScaler Center - ONEFILE VERSION
+Use se a versão onedir apresentar problemas de DLL no Windows
 """
 
 import sys
@@ -57,25 +58,21 @@ hiddenimports = [
     'aiohttp',
     'aiofiles',
     'aiohttp.connector',
-    'aiohttp.binaries,
-    datas=datas,
-    hiddenimports=hiddenimports,
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[
-        'matplotlib',
-        'numpy',
-        'pandas',
-        'scipy',
-        'PIL',
-        'tkinter',
-        'unittest',
-        'pytest',
-        '_pytest',
-        'IPython',
-        'notebook',
-        'tornadocompactados
+    'aiohttp.client',
+    'aiohttp.http',
+    'async_timeout',
+    
+    # Steam/VDF
+    'vdf',
+    
+    # Config
+    'yaml',
+    
+    # Logging
+    'colorlog',
+    'colorlog.colorlog',
+    
+    # Arquivos compactados
     'py7zr',
     'py7zr.properties',
     'py7zr.archiveinfo',
@@ -97,7 +94,7 @@ binaries = []
 a = Analysis(
     ['src/main.py'],
     pathex=[],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -112,6 +109,10 @@ a = Analysis(
         'tkinter',
         'unittest',
         'pytest',
+        '_pytest',
+        'IPython',
+        'notebook',
+        'tornado',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -121,54 +122,25 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# ONEFILE - Um único executável
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name=exe_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,  # Desabilitar UPX em onefile para maior compatibilidade
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=False,  # Não mostrar console (GUI app)
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # TODO: Adicionar ícone .ico/.icns se disponível
+    icon=None,
 )
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[
-        # Excluir DLLs Qt do UPX para evitar corrupção
-        'Qt6Core.dll',
-        'Qt6Gui.dll',
-        'Qt6Widgets.dll',
-        'Qt6Svg.dll',
-        'libQt6Core.so.6',
-        'libQt6Gui.so.6',
-        'libQt6Widgets.so.6',
-        'libQt6Svg.so.6',
-    ],
-    name='OptiScalerCenter',
-)
-
-# Para MacOS, criar app bundle
-if sys.platform == 'darwin':
-    app = BUNDLE(
-        coll,
-        name='OptiScalerCenter.app',
-        icon=None,
-        bundle_identifier='com.optiscaler.center',
-        info_plist={
-            'NSPrincipalClass': 'NSApplication',
-            'NSHighResolutionCapable': 'True',
-        },
-    )

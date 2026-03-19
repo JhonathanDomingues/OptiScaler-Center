@@ -95,11 +95,64 @@ jobs:
           cd dist
           tar -czf OptiScalerCenter-Linux-${{ github.event.inputs.version || github.ref_name }}.tar.gz OptiScalerCenter/
       
+      - name: Install AppImage tools
+        run: |
+          wget -O appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          sudo mv appimagetool /usr/local/bin/
+      
+      - name: Create AppImage structure
+        run: |
+          # Criar estrutura AppDir
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          # Copiar executável
+          cp -r dist/OptiScalerCenter/* AppDir/usr/bin/
+          
+          # Copiar arquivo desktop
+          cp optiscaler-center.desktop AppDir/usr/share/applications/
+          cp optiscaler-center.desktop AppDir/
+          
+          # Criar ícone simples (PNG de placeholder)
+          # Para produção, substitua por um ícone real
+          convert -size 256x256 xc:transparent \
+            -fill '#1b2838' -draw 'roundrectangle 20,20 236,236 20,20' \
+            -fill '#5c7e10' -draw 'circle 128,128 128,88' \
+            AppDir/usr/share/icons/hicolor/256x256/apps/optiscaler-center.png || \
+          echo "ImageMagick não disponível, usando ícone padrão"
+          
+          # Criar link simbólico para ícone
+          ln -sf usr/share/icons/hicolor/256x256/apps/optiscaler-center.png AppDir/optiscaler-center.png || true
+          
+          # Criar AppRun script
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin:${PATH}"
+          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          cd "${HERE}/usr/bin"
+          exec "${HERE}/usr/bin/OptiScalerCenter" "$@"
+          EOF
+          
+          chmod +x AppDir/AppRun
+      
+      - name: Build AppImage
+        run: |
+          # Criar AppImage
+          ARCH=x86_64 appimagetool AppDir OptiScalerCenter-Linux-${{ github.event.inputs.version || github.ref_name }}.AppImage
+          chmod +x OptiScalerCenter-Linux-${{ github.event.inputs.version || github.ref_name }}.AppImage
+          mv OptiScalerCenter-Linux-${{ github.event.inputs.version || github.ref_name }}.AppImage dist/
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.AppImage
           retention-days: 5
 
   create-release:
@@ -136,7 +189,8 @@ jobs:
             ### 📥 Downloads
             
             - **Windows**: `OptiScalerCenter-Windows-*.zip`
-            - **Linux**: `OptiScalerCenter-Linux-*.tar.gz`
+            - **Linux TAR.GZ**: `OptiScalerCenter-Linux-*.tar.gz`
+            - **Linux AppImage**: `OptiScalerCenter-Linux-*.AppImage` ⭐ Recomendado
             
             ### 📝 Instalação
             
@@ -145,7 +199,14 @@ jobs:
             2. Extraia para uma pasta
             3. Execute `OptiScalerCenter.exe`
             
-            #### Linux
+            #### Linux (AppImage) - Recomendado
+            1. Baixe o arquivo `.AppImage`
+            2. Torne executável: `chmod +x OptiScalerCenter-Linux-*.AppImage`
+            3. Execute: `./OptiScalerCenter-Linux-*.AppImage`
+            
+            Não requer instalação! Basta baixar e executar.
+            
+            #### Linux (TAR.GZ)
             1. Baixe o arquivo TAR.GZ
             2. Extraia: `tar -xzf OptiScalerCenter-Linux-*.tar.gz`
             3. Execute: `./OptiScalerCenter/OptiScalerCenter`
@@ -162,6 +223,7 @@ jobs:
           files: |
             ./artifacts/*.zip
             ./artifacts/*.tar.gz
+            ./artifacts/*.AppImage
           draft: false
           prerelease: false
         env:

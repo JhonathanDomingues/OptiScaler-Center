@@ -62,6 +62,57 @@
 - Python 3.10 ou superior
 - Sistema operacional Windows 10/11 ou Linux
 
+### 📦 Download (Binários Prontos)
+
+Baixe a versão mais recente na [página de releases](https://github.com/JhonathanDomingues/OptiScaler-Center/releases):
+
+#### Windows
+1. Baixe `OptiScalerCenter-Windows-vX.X.X.zip`
+2. Extraia para uma pasta
+3. Execute `OptiScalerCenter.exe`
+
+#### Linux (AppImage) - Recomendado 🚀
+1. Baixe `OptiScalerCenter-Linux-vX.X.X.AppImage`
+2. Torne executável: `chmod +x OptiScalerCenter-Linux-*.AppImage`
+3. Execute: `./OptiScalerCenter-Linux-*.AppImage`
+
+Não requer instalação! Funciona em qualquer distribuição Linux.
+
+#### Linux (TAR.GZ)
+1. Baixe `OptiScalerCenter-Linux-vX.X.X.tar.gz`
+2. Extraia: `tar -xzf OptiScalerCenter-Linux-*.tar.gz`
+3. Execute: `./OptiScalerCenter/OptiScalerCenter`
+
+### 🔧 Instalação para Desenvolvimento
+
+```bash
+# Clone o repositório
+git clone https://github.com/JhonathanDomingues/OptiScaler-Center.git
+cd optiscaler-center
+
+# Instale as dependências
+pip install -r requirements.txt
+
+# Execute a aplicação
+python src/main.py
+```
+
+### 🏗️ Compilar Executáveis
+
+#### Linux
+```bash
+# Compilar com PyInstaller
+./build.sh
+
+# Criar AppImage (requer build.sh primeiro)
+./build-appimage.sh
+```
+
+#### Windows
+```cmd
+build.bat
+```
+
 ### Instalação
 
 ```bash

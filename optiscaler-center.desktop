@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=OptiScaler Center
+Comment=Gerenciador visual para instalação do OptiScaler em jogos
+Exec=OptiScalerCenter
+Icon=optiscaler-center
+Terminal=false
+Categories=Game;Utility;
+Keywords=optiscaler;dlss;fsr;xess;upscaler;gaming;
+StartupNotify=true
+StartupWMClass=OptiScalerCenter
