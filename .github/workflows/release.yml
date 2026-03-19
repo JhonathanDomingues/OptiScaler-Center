@@ -153,18 +153,22 @@ jobs:
           # Criar link simbólico para ícone
           ln -sf usr/share/icons/hicolor/256x256/apps/optiscaler-center.png AppDir/optiscaler-center.png
           
-          # Criar AppRun script
-          cat > AppDir/AppRun << 'EOF'
-          #!/bin/bash
-          SELF=$(readlink -f "$0")
-          HERE=${SELF%/*}
-          export PATH="${HERE}/usr/bin:${PATH}"
-          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
-          cd "${HERE}/usr/bin"
-          exec "${HERE}/usr/bin/OptiScalerCenter" "$@"
-          EOF
+          # Criar AppRun script (sem indentação para preservar shebang corretamente)
+          printf '#!/bin/bash\n' > AppDir/AppRun
+          printf 'SELF=$(readlink -f "$0")\n' >> AppDir/AppRun
+          printf 'HERE=${SELF%%/*}\n' >> AppDir/AppRun
+          printf 'HERE=$(dirname "$SELF")\n' >> AppDir/AppRun
+          printf 'export LD_LIBRARY_PATH="${HERE}/usr/bin:${HERE}/usr/bin/_internal:${LD_LIBRARY_PATH}"\n' >> AppDir/AppRun
+          printf 'cd "${HERE}/usr/bin"\n' >> AppDir/AppRun
+          printf 'exec "${HERE}/usr/bin/OptiScalerCenter" "$@"\n' >> AppDir/AppRun
           
           chmod +x AppDir/AppRun
+          
+          # Verificar estrutura criada
+          echo "=== Estrutura do AppDir ==="
+          find AppDir -maxdepth 3 | head -30
+          echo "=== Conteúdo do AppRun ==="
+          cat AppDir/AppRun
       
       - name: Build AppImage
         run: |
