@@ -115,23 +115,39 @@ jobs:
           cp optiscaler-center.desktop AppDir/usr/share/applications/
           cp optiscaler-center.desktop AppDir/
           
-          # Criar ícone usando Python
+          # Gerar ícone com Python/Pillow
           python3 << 'PYTHON_SCRIPT'
           from PIL import Image, ImageDraw
           
-          # Criar imagem 256x256
+          # Criar imagem 256x256 com fundo transparente
           img = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
           draw = ImageDraw.Draw(img)
           
-          # Fundo escuro arredondado
-          draw.rounded_rectangle([(20, 20), (236, 236)], radius=20, fill='#1b2838')
+          # Cores
+          bg_color = '#1b2838'      # Fundo escuro
+          border_color = '#5c7e10'  # Verde escuro
+          button_color = '#76b900'  # Verde claro
           
-          # Círculo verde (ícone simples)
-          draw.ellipse([(88, 88), (168, 168)], fill='#5c7e10')
+          # Corpo do controle
+          draw.rounded_rectangle([(26, 90), (230, 192)], radius=26, fill=bg_color, outline=border_color, width=3)
+          
+          # Grips (gatilhos)
+          draw.rounded_rectangle([(38, 64), (77, 90)], radius=5, fill=bg_color, outline=border_color, width=2)
+          draw.rounded_rectangle([(179, 64), (218, 90)], radius=5, fill=bg_color, outline=border_color, width=2)
+          
+          # D-pad (cruz direcional esquerda)
+          dpad_x, dpad_y = 77, 133
+          draw.rounded_rectangle([(dpad_x-20, dpad_y-6), (dpad_x+20, dpad_y+6)], radius=3, fill=button_color)
+          draw.rounded_rectangle([(dpad_x-6, dpad_y-20), (dpad_x+6, dpad_y+20)], radius=3, fill=button_color)
+          
+          # Botões ABXY (direita)
+          btn_x, btn_y = 179, 133
+          for dx, dy in [(0, -18), (18, 0), (0, 18), (-18, 0)]:
+              draw.ellipse([(btn_x+dx-8, btn_y+dy-8), (btn_x+dx+8, btn_y+dy+8)], fill=button_color)
           
           # Salvar ícone
           img.save('AppDir/usr/share/icons/hicolor/256x256/apps/optiscaler-center.png')
-          print("Ícone criado com sucesso!")
+          print("✅ Ícone criado!")
           PYTHON_SCRIPT
           
           # Criar link simbólico para ícone
