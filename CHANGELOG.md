@@ -5,6 +5,11 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [0.1.3] - 2026-03-19
+
+### Corrigido
+- Versão sincronizada com o repositório do GitHub
+
 ## [0.1.2] - 2026-03-19
 
 ### Adicionado
@@ -46,5 +51,6 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Banco de dados SQLite
 - Sistema de logging
 
+[0.1.3]: https://github.com/seu-usuario/optiscaler-center/releases/tag/v0.1.3
 [0.1.2]: https://github.com/seu-usuario/optiscaler-center/releases/tag/v0.1.2
 [0.0.1]: https://github.com/seu-usuario/optiscaler-center/releases/tag/v0.0.1
