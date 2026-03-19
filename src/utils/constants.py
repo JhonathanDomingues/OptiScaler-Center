@@ -1,6 +1,7 @@
 """
 Constantes globais do OptiScaler Center
 """
+import sys
 from pathlib import Path
 
 # Informações da aplicação
@@ -9,9 +10,18 @@ APP_VERSION = "0.1.2"
 APP_AUTHOR = "OptiScaler Center Team"
 APP_DESCRIPTION = "Gerenciador visual para instalação do OptiScaler"
 
+# Detectar se está rodando como executável PyInstaller
+if getattr(sys, 'frozen', False):
+    # Rodando como executável empacotado
+    # BASE_DIR deve ser o diretório onde o executável está
+    BASE_DIR = Path(sys.executable).parent
+    SRC_DIR = BASE_DIR  # No executável, tudo está no mesmo nível
+else:
+    # Rodando como script Python normal
+    BASE_DIR = Path(__file__).parent.parent.parent
+    SRC_DIR = Path(__file__).parent.parent
+
 # Paths base
-BASE_DIR = Path(__file__).parent.parent.parent
-SRC_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 RESOURCES_DIR = BASE_DIR / "resources"
 LOGS_DIR = BASE_DIR / "logs"
