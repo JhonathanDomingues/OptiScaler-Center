@@ -4,6 +4,7 @@ PyInstaller spec file for OptiScaler Center
 """
 
 import sys
+import os
 from pathlib import Path
 
 block_cipher = None
@@ -17,13 +18,27 @@ exe_name = 'OptiScalerCenter'
 if is_windows:
     exe_name += '.exe'
 
-# Adicionar data files (recursos, configurações, etc)
-datas = [
-    ('data/config.yaml', 'data'),
-    ('resources/fsr4_sdk', 'resources/fsr4_sdk'),
+# Adicionar data files (recursos, configurações, etc) - apenas se existirem
+datas = []
+
+# Adicionar apenas arquivos que existem
+optional_files = [
     ('README.md', '.'),
     ('LICENSE', '.'),
 ]
+
+for src, dst in optional_files:
+    if os.path.exists(src):
+        datas.append((src, dst))
+
+# Adicionar diretórios que existem
+optional_dirs = [
+    ('resources/fsr4_sdk', 'resources/fsr4_sdk'),
+]
+
+for src, dst in optional_dirs:
+    if os.path.exists(src):
+        datas.append((src, dst))
 
 # Hidden imports necessários
 hiddenimports = [

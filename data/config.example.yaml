@@ -1,0 +1,71 @@
+# OptiScaler Center - Configuração de Exemplo
+# Copie este arquivo para config.yaml e ajuste conforme necessário
+# A aplicação criará automaticamente se não existir
+
+# Configurações gerais
+general:
+  language: pt-BR
+  theme: dark
+  check_updates_on_startup: true
+  minimize_to_tray: true
+
+# Configurações da interface
+ui:
+  window_width: 1080
+  window_height: 800
+  remember_window_state: true
+  show_tooltips: true
+  animation_duration: 200
+
+# Configurações de janela (gerenciado automaticamente)
+window:
+  width: 1080
+  height: 800
+
+# Configurações de caminhos (serão ajustados automaticamente)
+paths:
+  database: data/games.db
+  backups: data/backups
+  download_cache: resources/optiscaler_cache
+  logs: logs
+
+# Configurações do Steam
+steam:
+  auto_detect: true
+  scan_on_startup: false
+  include_proton_games: true
+  custom_libraries: []
+
+# Configurações do OptiScaler
+optiscaler:
+  auto_backup: true
+  keep_old_backups: true
+  max_cached_versions: 5
+  default_upscaler: Auto
+  default_quality: Quality
+
+# Configurações do FSR4 SDK
+fsr4_sdk:
+  default_enabled: false
+  use_int8: false
+
+# Configurações de rede
+network:
+  connection_timeout: 30
+  max_retries: 3
+  download_threads: 4
+  use_proxy: false
+  proxy_url: null
+
+# Configurações de logging
+logging:
+  level: INFO
+  console_output: true
+  max_file_size: 10485760  # 10 MB
+  backup_count: 5
+
+# Configurações avançadas
+advanced:
+  developer_mode: false
+  verify_downloads: true
+  parallel_installations: false
