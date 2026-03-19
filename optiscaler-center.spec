@@ -57,25 +57,21 @@ hiddenimports = [
     'aiohttp',
     'aiofiles',
     'aiohttp.connector',
-    'aiohttp.binaries,
-    datas=datas,
-    hiddenimports=hiddenimports,
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[
-        'matplotlib',
-        'numpy',
-        'pandas',
-        'scipy',
-        'PIL',
-        'tkinter',
-        'unittest',
-        'pytest',
-        '_pytest',
-        'IPython',
-        'notebook',
-        'tornadocompactados
+    'aiohttp.client',
+    'aiohttp.http',
+    'async_timeout',
+    
+    # Steam/VDF
+    'vdf',
+    
+    # Config
+    'yaml',
+    
+    # Logging
+    'colorlog',
+    'colorlog.colorlog',
+    
+    # Arquivos compactados
     'py7zr',
     'py7zr.properties',
     'py7zr.archiveinfo',
@@ -97,7 +93,7 @@ binaries = []
 a = Analysis(
     ['src/main.py'],
     pathex=[],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -112,6 +108,10 @@ a = Analysis(
         'tkinter',
         'unittest',
         'pytest',
+        '_pytest',
+        'IPython',
+        'notebook',
+        'tornado',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
