@@ -61,22 +61,22 @@ def main():
         
         # Definir ícone da aplicação
         app.setWindowIcon(create_app_icon(64))
-    
-    # High DPI é habilitado por padrão no PyQt6
-    
-    # Carregar configurações
-    theme = config_service.get('general.theme', 'dark')
-    
-    # Criar e exibir janela principal
-    logger.info("Criando janela principal...")
-    main_window = MainWindow(config_service, db_service)
-    main_window.show()
-    
-    logger.info("Aplicação iniciada com sucesso")
-    
-    # Executar loop de eventos
-    sys.exit(app.exec())
         
+        # High DPI é habilitado por padrão no PyQt6
+        
+        # Carregar configurações
+        theme = config_service.get('general.theme', 'dark')
+        
+        # Criar e exibir janela principal
+        logger.info("Criando janela principal...")
+        main_window = MainWindow(config_service, db_service)
+        main_window.show()
+        
+        logger.info("Aplicação iniciada com sucesso")
+        
+        # Executar loop de eventos
+        sys.exit(app.exec())
+            
     except Exception as e:
         # Capturar qualquer erro e mostrar ao usuário
         error_msg = f"Erro ao iniciar a aplicação:\n\n{str(e)}\n\n{traceback.format_exc()}"
