@@ -9,6 +9,7 @@ from datetime import datetime
 
 from utils.logger import LoggerMixin
 from domain.entities.game import Game
+from domain.entities.installation import Installation
 from domain.entities.dll_info import DLLInfo
 from domain.enums.dll_type import DLLType, APIType
 from domain.enums.platform import Platform
@@ -322,11 +323,42 @@ class GameRepository(LoggerMixin):
             platform=platform,
             executable=executable,
             supported_dlls=supported_dlls,
+            installation=self._load_active_installation(row['id']),
             last_scanned=last_scanned,
             detected_date=detected_date,
             notes=get_row_value(row, 'notes', '')
         )
     
+    def _load_active_installation(self, game_id: int) -> Optional['Installation']:
+        """Carrega a instalação ativa do jogo, se houver."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT * FROM installations WHERE game_id = ? AND status = 'active' ORDER BY install_date DESC LIMIT 1",
+                (game_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                from domain.entities.installation import Installation
+                install_date = None
+                if row['install_date']:
+                    try:
+                        install_date = datetime.fromisoformat(row['install_date'])
+                    except Exception:
+                        pass
+                backup_path = Path(row['backup_path']) if row['backup_path'] else None
+                return Installation(
+                    id=row['id'],
+                    game_id=row['game_id'],
+                    version=row['version'],
+                    install_date=install_date,
+                    backup_path=backup_path,
+                    status=row['status']
+                )
+        except Exception as e:
+            self.logger.warning(f"Erro ao carregar instalação ativa do jogo {game_id}: {e}")
+        return None
+
     def _save_detected_dlls(self, game_id: int, detected_dlls: Dict[str, DLLInfo]):
         """
         Salva DLLs detectadas na tabela game_dlls

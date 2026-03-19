@@ -55,7 +55,7 @@ class UninstallOptiScalerUseCase(LoggerMixin):
                 self.logger.info("=" * 60)
 
                 # 1. Ler manifesto dos arquivos instalados
-                installed_files, loader_dll = self._read_manifest(backup_path)
+                installed_files, loader_dll = self._read_manifest(backup_path, game_dir)
                 self.logger.info(f"[1/3] {len(installed_files)} arquivo(s) para remover")
 
                 # 2. Remover arquivos do OptiScaler do jogo
@@ -84,22 +84,65 @@ class UninstallOptiScalerUseCase(LoggerMixin):
     # Helpers privados
     # ------------------------------------------------------------------
 
-    def _read_manifest(self, backup_path: Optional[Path]):
-        """Lê o manifesto salvo pela instalação. Retorna (lista_de_arquivos, loader_dll)."""
+    def _read_manifest(self, backup_path: Optional[Path], game_dir: Optional[Path] = None):
+        """Lê o manifesto salvo pela instalação. Retorna (lista_de_arquivos, loader_dll).
+        Se não houver manifesto, tenta detectar arquivos do OptiScaler automaticamente."""
         if not backup_path:
-            return [], None
+            return self._detect_optiscaler_files(game_dir, backup_path), None
 
         manifest_file = backup_path / "optiscaler_manifest.json"
         if not manifest_file.exists():
-            self.logger.warning("Manifesto não encontrado — remoção pode ser incompleta")
-            return [], None
+            self.logger.warning("Manifesto não encontrado — detectando arquivos do OptiScaler automaticamente")
+            return self._detect_optiscaler_files(game_dir, backup_path), None
 
         try:
             data = json.loads(manifest_file.read_text(encoding='utf-8'))
             return data.get("installed_files", []), data.get("loader_dll")
         except Exception as e:
             self.logger.error(f"Erro ao ler manifesto: {e}")
-            return [], None
+            return self._detect_optiscaler_files(game_dir, backup_path), None
+
+    # Nomes de DLL que o OptiScaler pode usar como loader
+    _LOADER_DLL_NAMES = {
+        "dxgi.dll", "winmm.dll", "d3d12.dll",
+        "dbghelp.dll", "version.dll", "wininet.dll", "winhttp.dll",
+    }
+
+    def _detect_optiscaler_files(self, game_dir: Optional[Path], backup_path: Optional[Path]) -> list:
+        """Detecta arquivos do OptiScaler no diretório do jogo quando não há manifesto."""
+        if not game_dir or not game_dir.exists():
+            return []
+
+        # Nomes de arquivos colocados apenas pelo OptiScaler (exceto o loader, tratado abaixo)
+        OPTISCALER_ONLY = {
+            "optiscaler.ini", "optiscaler.dll",
+        }
+
+        # Nomes de arquivo presentes no backup (não devem ser removidos — serão restaurados)
+        backup_names: set[str] = set()
+        if backup_path and backup_path.exists():
+            backup_names = {f.name.lower() for f in backup_path.iterdir() if f.is_file()}
+
+        detected: list[str] = []
+
+        # 1. Arquivos cujo nome indica claramente que são do OptiScaler
+        # 2. Loader DLLs que existem no jogo mas NÃO no backup (logo, foram colocados pelo OptiScaler)
+        for f in game_dir.iterdir():
+            if not f.is_file():
+                continue
+            name_lower = f.name.lower()
+            if name_lower in OPTISCALER_ONLY:
+                detected.append(f.name)
+            elif name_lower in self._LOADER_DLL_NAMES and name_lower not in backup_names:
+                # Loader DLL não estava no backup → foi instalado pelo OptiScaler
+                detected.append(f.name)
+
+        if detected:
+            self.logger.info(f"Arquivos detectados para remoção: {detected}")
+        else:
+            self.logger.warning("Nenhum arquivo do OptiScaler detectado automaticamente")
+
+        return detected
 
     def _remove_installed_files(self, game_dir: Path, installed_files: list):
         """Remove os arquivos instalados pelo OptiScaler do diretório do jogo."""
