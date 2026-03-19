@@ -89,27 +89,24 @@ fi
 # Link simbólico para o ícone
 ln -sf usr/share/icons/hicolor/256x256/apps/optiscaler-center.png AppDir/optiscaler-center.png 2>/dev/null || true
 
-# Criar AppRun script
+# Criar AppRun script (usando printf para evitar problemas de indentação)
 echo "📝 Criando AppRun..."
-cat > AppDir/AppRun << 'EOF'
-#!/bin/bash
-SELF=$(readlink -f "$0")
-HERE=${SELF%/*}
-export PATH="${HERE}/usr/bin:${PATH}"
-export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
-cd "${HERE}/usr/bin"
-exec "${HERE}/usr/bin/OptiScalerCenter" "$@"
-EOF
+printf '#!/bin/bash\n' > AppDir/AppRun
+printf 'SELF=$(readlink -f "$0")\n' >> AppDir/AppRun
+printf 'HERE=$(dirname "$SELF")\n' >> AppDir/AppRun
+printf 'export LD_LIBRARY_PATH="${HERE}/usr/bin:${HERE}/usr/bin/_internal:${LD_LIBRARY_PATH}"\n' >> AppDir/AppRun
+printf 'cd "${HERE}/usr/bin"\n' >> AppDir/AppRun
+printf 'exec "${HERE}/usr/bin/OptiScalerCenter" "$@"\n' >> AppDir/AppRun
 
 chmod +x AppDir/AppRun
 
 # Obter versão
 VERSION=$(grep "APP_VERSION" src/utils/constants.py | cut -d'"' -f2)
 
-# Criar AppImage
+# Criar AppImage (APPIMAGE_EXTRACT_AND_RUN=1 para sistemas sem FUSE, como Flatpak)
 echo ""
 echo "🔨 Construindo AppImage..."
-ARCH=x86_64 appimagetool AppDir "OptiScalerCenter-Linux-v${VERSION}.AppImage"
+ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 appimagetool AppDir "OptiScalerCenter-Linux-v${VERSION}.AppImage"
 
 if [ -f "OptiScalerCenter-Linux-v${VERSION}.AppImage" ]; then
     chmod +x "OptiScalerCenter-Linux-v${VERSION}.AppImage"

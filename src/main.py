@@ -9,17 +9,24 @@ import traceback
 
 # Detectar se está rodando como executável PyInstaller
 if getattr(sys, 'frozen', False):
-    # Rodando como executável
+    # PyInstaller empacota os módulos em sys._MEIPASS (_internal/)
+    # Não manipulamos sys.path — PyInstaller já o configura corretamente
+    # application_path = diretório onde o executável está
     application_path = Path(sys.executable).parent
-    # Adicionar o diretório base ao path
-    sys.path.insert(0, str(application_path))
+    
+    # Garantir que _MEIPASS está no path (PyInstaller faz isso automaticamente,
+    # mas adicionamos explicitamente para ambientes AppImage que podem diferir)
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass and str(meipass) not in sys.path:
+        sys.path.insert(0, str(meipass))
 else:
     # Rodando como script Python normal
     application_path = Path(__file__).parent.parent
     sys.path.insert(0, str(Path(__file__).parent))
 
-# Mudar para o diretório da aplicação
-os.chdir(str(application_path))
+# Mudar para o diretório da aplicação apenas em modo script (evita problemas no AppImage)
+if not getattr(sys, 'frozen', False):
+    os.chdir(str(application_path))
 
 try:
     from PyQt6.QtWidgets import QApplication, QMessageBox

@@ -172,8 +172,8 @@ jobs:
       
       - name: Build AppImage
         run: |
-          # Criar AppImage
-          ARCH=x86_64 appimagetool AppDir OptiScalerCenter-Linux-${{ github.event.inputs.version || github.ref_name }}.AppImage
+          # Criar AppImage (APPIMAGE_EXTRACT_AND_RUN=1 para sistemas sem FUSE)
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 appimagetool AppDir OptiScalerCenter-Linux-${{ github.event.inputs.version || github.ref_name }}.AppImage
           chmod +x OptiScalerCenter-Linux-${{ github.event.inputs.version || github.ref_name }}.AppImage
           mv OptiScalerCenter-Linux-${{ github.event.inputs.version || github.ref_name }}.AppImage dist/
       
