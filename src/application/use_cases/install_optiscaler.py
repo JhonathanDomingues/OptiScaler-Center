@@ -295,6 +295,20 @@ class InstallOptiScalerUseCase(LoggerMixin):
         if not sdk_dir or not sdk_dir.exists():
             self.logger.warning(f"FSR4 SDK '{variant}' não encontrado em {sdk_dir}")
             return []
+
+        # Verificar se há DLLs diretas; caso contrário, buscar em subpastas de versão
+        direct_dlls = list(sdk_dir.glob('*.dll'))
+        if not direct_dlls:
+            version_dirs = sorted(
+                [d for d in sdk_dir.iterdir() if d.is_dir()],
+                key=lambda d: d.name
+            )
+            if not version_dirs:
+                self.logger.warning(f"FSR4 SDK '{variant}' não contém DLLs nem subpastas de versão")
+                return []
+            sdk_dir = version_dirs[-1]  # subpasta de versão mais recente
+            self.logger.info(f"FSR4 SDK '{variant}': usando versão {sdk_dir.name}")
+
         installed = []
         for dll in sdk_dir.glob('*.dll'):
             shutil.copy2(dll, game_dir / dll.name)

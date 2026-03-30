@@ -118,11 +118,12 @@ class GameCardWidget(QFrame):
             uninstall_btn.clicked.connect(lambda: self.uninstall_requested.emit(self.game))
             button_layout.addWidget(uninstall_btn)
         else:
-            if len(self.game.supported_dlls) > 0:
-                install_btn = QPushButton(tr("card_btn_install"))
-                install_btn.setMaximumWidth(130)
-                install_btn.clicked.connect(lambda: self.install_requested.emit(self.game))
-                button_layout.addWidget(install_btn)
+            # Mostrar botão para todos os jogos — OptiScaler é compatível com
+            # jogos UE4/UE5 mesmo sem DLLs de upscaling detectadas.
+            install_btn = QPushButton(tr("card_btn_install"))
+            install_btn.setMaximumWidth(130)
+            install_btn.clicked.connect(lambda: self.install_requested.emit(self.game))
+            button_layout.addWidget(install_btn)
         
         button_layout.addStretch()
         info_layout.addLayout(button_layout)

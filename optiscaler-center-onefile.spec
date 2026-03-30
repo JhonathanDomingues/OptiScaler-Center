@@ -35,6 +35,8 @@ for src, dst in optional_files:
 # Adicionar diretórios que existem
 optional_dirs = [
     ('resources/fsr4_sdk', 'resources/fsr4_sdk'),
+    ('resources/locales',  'resources/locales'),
+    ('resources/icons',    'resources/icons'),
 ]
 
 for src, dst in optional_dirs:

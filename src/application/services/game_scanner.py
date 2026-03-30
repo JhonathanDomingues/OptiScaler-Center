@@ -145,8 +145,14 @@ class GameScanner(LoggerMixin):
                 self.logger.warning(f"  ⚠ Pasta não encontrada: {install_path}")
                 return None
             
-            # Analisar DLLs
+            # Analisar DLLs — tenta pela raiz do jogo; se nada for encontrado,
+            # tenta novamente a partir da subpasta de executável (estrutura UE4/UE5)
             detected_dlls = self.dll_analyzer.analyze_game(install_path)
+            if not detected_dlls:
+                ue_dir = self._find_ue_binaries_dir(install_path)
+                if ue_dir:
+                    self.logger.info(f"  Rescaneando a partir de {ue_dir.name} (UE4/UE5)")
+                    detected_dlls = self.dll_analyzer.analyze_game(ue_dir)
             
             # Determinar suporte às tecnologias
             supports_dlss = DLLType.DLSS.value in detected_dlls
@@ -188,6 +194,28 @@ class GameScanner(LoggerMixin):
             self.logger.error(f"  ✗ Erro ao processar jogo: {e}")
             return None
     
+    def _find_ue_binaries_dir(self, game_path: Path) -> Optional[Path]:
+        """
+        Detecta a pasta Binaries/Win64 em jogos com estrutura Unreal Engine.
+        Busca até 2 níveis de profundidade: <raiz>/Binaries/Win64 ou
+        <raiz>/<Sub>/Binaries/Win64.
+        Retorna None se não encontrado.
+        """
+        candidates: list[Path] = [game_path / "Binaries" / "Win64"]
+        try:
+            for sub in game_path.iterdir():
+                if sub.is_dir():
+                    candidates.append(sub / "Binaries" / "Win64")
+        except PermissionError:
+            pass
+        for candidate in candidates:
+            try:
+                if candidate.exists() and candidate.is_dir():
+                    return candidate
+            except PermissionError:
+                continue
+        return None
+
     def get_scan_statistics(self, games: List[Game]) -> Dict:
         """
         Gera estatísticas da varredura
