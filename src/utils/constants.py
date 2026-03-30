@@ -38,10 +38,11 @@ DATABASE_PATH = DATA_DIR / "games.db"
 CONFIG_PATH = DATA_DIR / "config.yaml"
 BACKUPS_DIR = DATA_DIR / "backups"
 CACHE_DIR = USER_DATA_DIR / "optiscaler_cache"  # gravável
-FSR4_SDK_DIR = RESOURCES_DIR / "fsr4_sdk"       # somente-leitura (bundled)
+FSR4_SDK_DIR  = RESOURCES_DIR / "fsr4_sdk"       # somente-leitura (bundled)
+LOCALES_DIR   = RESOURCES_DIR / "locales"        # somente-leitura (bundled)
 
 # URLs
-OPTISCALER_REPO = "optiscaler/OptiScaler"
+OPTISCALER_REPO = "cdozdil/OptiScaler"
 GITHUB_API_BASE = "https://api.github.com"
 GITHUB_RELEASES_URL = f"{GITHUB_API_BASE}/repos/{OPTISCALER_REPO}/releases"
 

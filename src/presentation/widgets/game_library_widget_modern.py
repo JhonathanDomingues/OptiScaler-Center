@@ -4,7 +4,7 @@ Layout em grid com cards de jogos estilo Steam
 """
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-    QGridLayout, QGroupBox, QLabel,QPushButton, QComboBox, QProgressBar, QMessageBox,
+    QGridLayout, QGroupBox, QLabel, QPushButton, QComboBox, QProgressBar, QMessageBox,
     QTextEdit, QDialog, QDialogButtonBox, QSplitter
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
@@ -22,6 +22,39 @@ from application.use_cases.install_optiscaler import InstallOptiScalerUseCase, S
 from application.use_cases.uninstall_optiscaler import UninstallOptiScalerUseCase
 from presentation.widgets.game_card_widget import GameCardWidget
 from presentation.styles.modern_theme import MODERN_THEME
+from utils.i18n import tr
+
+
+class ScanGamesThread(QThread):
+    """Thread para varredura de jogos em background"""
+    finished = pyqtSignal(list, str)  # games, message
+
+    def __init__(self, scan_uc):
+        super().__init__()
+        self.scan_uc = scan_uc
+
+    def run(self):
+        try:
+            games = self.scan_uc.execute()
+            self.finished.emit(games, "")
+        except Exception as e:
+            self.finished.emit([], str(e))
+
+
+class FetchVersionsThread(QThread):
+    """Thread para busca de versões em background"""
+    finished = pyqtSignal(list, str)  # versions, message
+
+    def __init__(self, fetch_uc):
+        super().__init__()
+        self.fetch_uc = fetch_uc
+
+    def run(self):
+        try:
+            versions = self.fetch_uc.execute(include_prerelease=True)
+            self.finished.emit(versions, "")
+        except Exception as e:
+            self.finished.emit([], str(e))
 
 
 class GameLibraryWidget(QWidget, LoggerMixin):
@@ -47,7 +80,9 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         self.games: List[Game] = []
         self.filtered_games: List[Game] = []
         self.game_cards: List[GameCardWidget] = []
-        
+        self._scan_thread: Optional[ScanGamesThread] = None
+        self._fetch_thread: Optional[FetchVersionsThread] = None
+
         self._init_ui()
         
         # Carregar jogos salvos
@@ -100,38 +135,38 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         layout.setSpacing(10)
         
         # Título
-        title = QLabel("Biblioteca de Jogos")
+        title = QLabel(tr("lib_title"))
         title.setObjectName("title")
         layout.addWidget(title)
-        
+
         layout.addStretch()
-        
+
         # Filtro de tecnologia
-        layout.addWidget(QLabel("Filtrar:"))
+        layout.addWidget(QLabel(tr("lib_filter_label")))
         self.filter_combo = QComboBox()
         self.filter_combo.addItems([
-            "Todos os jogos",
-            "Com DLSS",
-            "Com FSR",
-            "Com XeSS",
-            "Com qualquer tecnologia",
-            "OptiScaler instalado"
+            tr("lib_filter_all"),
+            tr("lib_filter_dlss"),
+            tr("lib_filter_fsr"),
+            tr("lib_filter_xess"),
+            tr("lib_filter_any"),
+            tr("lib_filter_installed"),
         ])
         self.filter_combo.currentIndexChanged.connect(self._apply_filter)
         layout.addWidget(self.filter_combo)
-        
+
         # Botão varrer jogos
-        self.scan_btn = QPushButton("🔍 Varrer Jogos")
+        self.scan_btn = QPushButton(tr("lib_scan_btn"))
         self.scan_btn.clicked.connect(self._scan_games)
         layout.addWidget(self.scan_btn)
-        
+
         # Botão atualizar versões
-        self.fetch_btn = QPushButton("📥 Buscar Versões")
+        self.fetch_btn = QPushButton(tr("lib_fetch_btn"))
         self.fetch_btn.clicked.connect(self._fetch_versions)
         layout.addWidget(self.fetch_btn)
-        
+
         # Contador de jogos
-        self.game_count_label = QLabel("0 jogos")
+        self.game_count_label = QLabel(tr("lib_game_count", count=0))
         self.game_count_label.setObjectName("subtitle")
         layout.addWidget(self.game_count_label)
         
@@ -177,7 +212,7 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             self.grid_layout.addWidget(card, row, col)
         
         # Atualizar contador
-        self.game_count_label.setText(f"{len(self.filtered_games)} jogos")
+        self.game_count_label.setText(tr("lib_game_count", count=len(self.filtered_games)))
     
     def _calculate_columns(self) -> int:
         """Calcula número de colunas baseado na largura disponível"""
@@ -237,66 +272,71 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         self.grid_container.updateGeometry()
     
     def _scan_games(self):
-        """Varre jogos Steam"""
+        """Varre jogos Steam em background"""
+        if self._scan_thread and self._scan_thread.isRunning():
+            return
+
         self.scan_btn.setEnabled(False)
-        self.scan_btn.setText("Varrendo...")
-        
-        try:
-            # Executar varredura
-            self.games = self.scan_games_uc.execute()
-            self.filtered_games = self.games.copy()
-            
-            # Atualizar grid
-            self._refresh_grid()
-            
-            QMessageBox.information(
-                self,
-                "Varredura Concluída",
-                f"✓ Encontrados {len(self.games)} jogos\n"
-                f"• Com DLSS: {sum(1 for g in self.games if g.has_dlss)}\n"
-                f"• Com FSR: {sum(1 for g in self.games if g.has_fsr)}\n"
-                f"• Com XeSS: {sum(1 for g in self.games if g.has_xess)}"
-            )
-        
-        except Exception as e:
-            self.logger.error(f"Erro ao varrer jogos: {e}")
-            QMessageBox.critical(
-                self,
-                "Erro",
-                f"Falha ao varrer jogos:\n{e}"
-            )
-        
-        finally:
-            self.scan_btn.setEnabled(True)
-            self.scan_btn.setText("🔍 Varrer Jogos")
+        self.scan_btn.setText(tr("lib_scanning"))
+
+        self._scan_thread = ScanGamesThread(self.scan_games_uc)
+        self._scan_thread.finished.connect(self._on_scan_finished)
+        self._scan_thread.start()
+
+    def _on_scan_finished(self, games: list, error: str):
+        """Callback quando varredura termina"""
+        self.scan_btn.setEnabled(True)
+        self.scan_btn.setText(tr("lib_scan_btn"))
+
+        if error:
+            self.logger.error(f"Erro ao varrer jogos: {error}")
+            QMessageBox.critical(self, tr("error_title"), tr("scan_error_msg", error=error))
+            return
+
+        self.games = games
+        self.filtered_games = games.copy()
+        self._refresh_grid()
+
+        QMessageBox.information(
+            self,
+            tr("scan_done_title"),
+            tr("scan_done_msg",
+               count=len(self.games),
+               dlss=sum(1 for g in self.games if g.has_dlss),
+               fsr=sum(1 for g in self.games if g.has_fsr),
+               xess=sum(1 for g in self.games if g.has_xess))
+        )
     
     def _fetch_versions(self):
-        """Busca versões do OptiScaler"""
+        """Busca versões do OptiScaler em background"""
+        if self._fetch_thread and self._fetch_thread.isRunning():
+            return
+
         self.fetch_btn.setEnabled(False)
-        self.fetch_btn.setText("Buscando...")
-        
-        try:
-            versions = self.fetch_versions_uc.execute(include_prerelease=True)
-            
-            QMessageBox.information(
-                self,
-                "Versões Atualizadas",
-                f"✓ Encontradas {len(versions)} versões do OptiScaler\n"
-                f"• Última estável: {versions[0].tag_name if versions else 'N/A'}\n"
-                f"• Baixadas: {sum(1 for v in versions if v.is_downloaded)}"
-            )
-        
-        except Exception as e:
-            self.logger.error(f"Erro ao buscar versões: {e}")
-            QMessageBox.critical(
-                self,
-                "Erro",
-                f"Falha ao buscar versões:\n{e}"
-            )
-        
-        finally:
-            self.fetch_btn.setEnabled(True)
-            self.fetch_btn.setText("📥 Buscar Versões")
+        self.fetch_btn.setText(tr("lib_fetching"))
+
+        self._fetch_thread = FetchVersionsThread(self.fetch_versions_uc)
+        self._fetch_thread.finished.connect(self._on_fetch_finished)
+        self._fetch_thread.start()
+
+    def _on_fetch_finished(self, versions: list, error: str):
+        """Callback quando fetch de versões termina"""
+        self.fetch_btn.setEnabled(True)
+        self.fetch_btn.setText(tr("lib_fetch_btn"))
+
+        if error:
+            self.logger.error(f"Erro ao buscar versões: {error}")
+            QMessageBox.critical(self, tr("error_title"), tr("fetch_error_msg", error=error))
+            return
+
+        QMessageBox.information(
+            self,
+            tr("fetch_done_title"),
+            tr("fetch_done_msg",
+               count=len(versions),
+               latest=versions[0].tag_name if versions else tr("details_na"),
+               downloaded=sum(1 for v in versions if v.is_downloaded))
+        )
     
     def _apply_filter(self):
         """Aplica filtro na lista de jogos"""
@@ -338,9 +378,8 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             if not downloaded_versions:
                 reply = QMessageBox.question(
                     self,
-                    "Nenhuma Versão Disponível",
-                    "Você ainda não baixou nenhuma versão do OptiScaler.\n\n"
-                    "Deseja ir para a aba de Downloads para baixar uma versão?",
+                    tr("no_versions_title"),
+                    tr("no_versions_msg"),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
                 
@@ -370,8 +409,8 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         
         reply = QMessageBox.question(
             self,
-            "Confirmar Desinstalação",
-            f"Desinstalar OptiScaler de:\n{game.name}?",
+            tr("uninstall_confirm_title"),
+            tr("uninstall_confirm_msg", game=game.name),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
@@ -390,16 +429,16 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             if success:
                 QMessageBox.information(
                     self,
-                    "Instalação Concluída",
-                    f"✓ OptiScaler instalado com sucesso em:\n{game.name}"
+                    tr("install_done_title"),
+                    tr("install_done_msg", game=game.name)
                 )
                 self._load_existing_games()
             else:
-                QMessageBox.warning(self, "Aviso", "Falha na instalação")
-        
+                QMessageBox.warning(self, tr("warning_title"), tr("install_fail_msg"))
+
         except Exception as e:
             self.logger.error(f"Erro ao instalar: {e}")
-            QMessageBox.critical(self, "Erro", f"Falha na instalação:\n{e}")
+            QMessageBox.critical(self, tr("error_title"), tr("install_error_msg", error=e))
     
     def _uninstall_optiscaler(self, game: Game):
         """Desinstala OptiScaler do jogo"""
@@ -409,23 +448,16 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             if success:
                 QMessageBox.information(
                     self,
-                    "Desinstalação Concluída",
-                    f"✓ OptiScaler removido com sucesso de:\n{game.name}"
+                    tr("uninstall_done_title"),
+                    tr("uninstall_done_msg", game=game.name)
                 )
                 self._load_existing_games()
             else:
-                QMessageBox.warning(self, "Aviso", "Falha na desinstalação")
-        
+                QMessageBox.warning(self, tr("warning_title"), tr("uninstall_fail_msg"))
+
         except Exception as e:
             self.logger.error(f"Erro ao desinstalar: {e}")
-            QMessageBox.critical(self, "Erro", f"Falha na desinstalação:\n{e}")
-    
-    def resizeEvent(self, event):
-        """Reorganiza grid ao redimensionar"""
-        super().resizeEvent(event)
-        # Reorganizar grid dinamicamente para layout responsivo
-        if hasattr(self, 'game_cards') and self.game_cards:
-            self._refresh_grid()
+            QMessageBox.critical(self, tr("error_title"), tr("uninstall_error_msg", error=e))
 
 
 class GameDetailsDialog(QDialog):
@@ -435,7 +467,7 @@ class GameDetailsDialog(QDialog):
         super().__init__(parent)
         self.game = game
         
-        self.setWindowTitle(f"Detalhes: {game.name}")
+        self.setWindowTitle(tr("details_title", game=game.name))
         self.setMinimumSize(500, 400)
         
         self._init_ui()
@@ -453,23 +485,23 @@ class GameDetailsDialog(QDialog):
         info_text = QTextEdit()
         info_text.setReadOnly(True)
         
-        info = f"""
-<b>AppID:</b> {self.game.appid or 'N/A'}<br>
-<b>Plataforma:</b> {self.game.platform.value}<br>
-<b>Caminho:</b> {self.game.path}<br>
-<b>Executável:</b> {self.game.executable or 'N/A'}<br><br>
+        na = tr("details_na")
+        info = (
+            f"<b>{tr('details_appid')}</b> {self.game.appid or na}<br>"
+            f"<b>{tr('details_platform')}</b> {self.game.platform.value}<br>"
+            f"<b>{tr('details_path')}</b> {self.game.path}<br>"
+            f"<b>{tr('details_executable')}</b> {self.game.executable or na}<br><br>"
+            f"<b>{tr('details_tech')}</b><br>"
+        )
 
-<b>Tecnologias Suportadas:</b><br>
-"""
-        
         if self.game.supported_dlls:
             for dll_type, dll_info in self.game.supported_dlls.items():
                 info += f"• {dll_info.dll_type.display_name}<br>"
-                info += f"  - Arquivo: {dll_info.path.name}<br>"
-                info += f"  - Tamanho: {dll_info.size / 1024 / 1024:.2f} MB<br>"
-                info += f"  - Versão: {dll_info.version or 'N/A'}<br><br>"
+                info += f"  - {tr('details_file')} {dll_info.path.name}<br>"
+                info += f"  - {tr('details_size')} {dll_info.size / 1024 / 1024:.2f} MB<br>"
+                info += f"  - {tr('details_version')} {dll_info.version or na}<br><br>"
         else:
-            info += "Nenhuma DLL detectada<br>"
+            info += f"{tr('details_no_dll')}<br>"
         
         info_text.setHtml(info)
         layout.addWidget(info_text)
@@ -494,7 +526,7 @@ class InstallDialog(QDialog):
         self.selected_loader = "dxgi.dll"
         self.selected_fsr4 = None
 
-        self.setWindowTitle(f"Instalar OptiScaler: {game.name}")
+        self.setWindowTitle(tr("install_dialog_title", game=game.name))
         self.setMinimumWidth(420)
 
         self._init_ui()
@@ -505,23 +537,23 @@ class InstallDialog(QDialog):
         layout = QVBoxLayout()
 
         # Seletor de versão
-        layout.addWidget(QLabel("Versão do OptiScaler:"))
+        layout.addWidget(QLabel(tr("install_dialog_version")))
         self.version_combo = QComboBox()
         layout.addWidget(self.version_combo)
 
         # Seletor de loader DLL
-        layout.addWidget(QLabel("Loader DLL (nome que o OptiScaler vai usar):"))
+        layout.addWidget(QLabel(tr("install_dialog_loader")))
         self.loader_combo = QComboBox()
         for dll in SUPPORTED_LOADER_DLLS:
             self.loader_combo.addItem(dll, dll)
         layout.addWidget(self.loader_combo)
 
         # Seletor de FSR4 SDK
-        layout.addWidget(QLabel("FSR4 SDK (opcional):"))
+        layout.addWidget(QLabel(tr("install_dialog_fsr4")))
         self.fsr4_combo = QComboBox()
-        self.fsr4_combo.addItem("Não incluir", None)
-        self.fsr4_combo.addItem("Padrão — 3 DLLs (amd_fidelityfx_*.dll)", "standard")
-        self.fsr4_combo.addItem("INT8 — apenas upscaler", "int8")
+        self.fsr4_combo.addItem(tr("install_dialog_fsr4_none"), None)
+        self.fsr4_combo.addItem(tr("install_dialog_fsr4_std"),  "standard")
+        self.fsr4_combo.addItem(tr("install_dialog_fsr4_int8"), "int8")
         layout.addWidget(self.fsr4_combo)
 
         # Botões
@@ -542,7 +574,7 @@ class InstallDialog(QDialog):
             for version in versions:
                 self.version_combo.addItem(version.tag_name, version.id)
         except Exception as e:
-            QMessageBox.warning(self, "Aviso", f"Erro ao carregar versões:\n{e}")
+            QMessageBox.warning(self, tr("warning_title"), tr("install_dialog_version_err", error=e))
 
     def _on_accept(self):
         """Confirma seleção"""

@@ -15,7 +15,7 @@ from domain.entities.optiscaler_version import OptiScalerVersion
 class GitHubService(LoggerMixin):
     """Gerencia downloads de releases do GitHub"""
     
-    REPO_OWNER = "optiscaler"
+    REPO_OWNER = "cdozdil"
     REPO_NAME = "OptiScaler"
     API_BASE = "https://api.github.com"
     

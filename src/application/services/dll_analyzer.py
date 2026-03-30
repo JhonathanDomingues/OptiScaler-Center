@@ -52,45 +52,71 @@ class DLLAnalyzer(LoggerMixin):
     
     def analyze_game(self, game_path: Path) -> Dict[str, DLLInfo]:
         """
-        Analisa pasta do jogo em busca de DLLs de upscaling
-        
+        Analisa pasta do jogo em busca de DLLs de upscaling.
+        Ignora automaticamente arquivos instalados pelo OptiScaler (via manifesto).
+
         Args:
             game_path: Caminho para a pasta do jogo
-        
+
         Returns:
             Dict {dll_type: DLLInfo} com DLLs encontradas
         """
         if not game_path.exists() or not game_path.is_dir():
             self.logger.warning(f"Caminho inválido: {game_path}")
             return {}
-        
+
         self.logger.info(f"Analisando DLLs em: {game_path.name}")
-        
+
+        # Coletar arquivos instalados pelo OptiScaler para ignorar na detecção
+        ignored_names = self._collect_optiscaler_installed_names(game_path)
+
         # Procurar DLLs
         dll_files = self._find_dll_files(game_path)
         self.logger.debug(f"Encontradas {len(dll_files)} DLL(s)")
-        
+
         # Categorizar DLLs
         detected_dlls = {}
-        
+
         for dll_file in dll_files:
+            # Pular arquivos instalados pelo OptiScaler
+            if dll_file.name.lower() in ignored_names:
+                self.logger.debug(f"Ignorando (OptiScaler): {dll_file.name}")
+                continue
+
             dll_type = self._identify_dll_type(dll_file)
-            
+
             if dll_type != DLLType.UNKNOWN:
                 # Verificar tamanho mínimo
                 if dll_file.stat().st_size < self.MIN_SIZES.get(dll_type, 0):
                     self.logger.debug(f"DLL muito pequena, ignorando: {dll_file.name}")
                     continue
-                
+
                 # Criar DLLInfo
                 dll_info = self._create_dll_info(dll_file, dll_type)
-                
+
                 # Adicionar apenas se ainda não detectada
                 if dll_type.value not in detected_dlls:
                     detected_dlls[dll_type.value] = dll_info
                     self.logger.info(f"✓ Detectado: {dll_type.display_name} ({dll_file.name})")
-        
+
         return detected_dlls
+
+    def _collect_optiscaler_installed_names(self, game_path: Path) -> set:
+        """
+        Lê o manifesto do OptiScaler (se existir) e retorna os nomes dos arquivos
+        instalados em lowercase, para serem ignorados na detecção de DLLs nativas.
+        """
+        import json
+        ignored: set = set()
+        try:
+            for manifest_file in game_path.rglob("optiscaler_manifest.json"):
+                data = json.loads(manifest_file.read_text(encoding='utf-8'))
+                for fname in data.get("installed_files", []):
+                    ignored.add(Path(fname).name.lower())
+                break  # usar apenas o primeiro manifesto encontrado
+        except Exception:
+            pass
+        return ignored
     
     def _find_dll_files(self, root_path: Path, current_depth: int = 0) -> List[Path]:
         """

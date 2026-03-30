@@ -17,6 +17,7 @@ from domain.entities.optiscaler_version import OptiScalerVersion
 from domain.repositories.version_repository import VersionRepository
 from infrastructure.database.db_service import DatabaseService
 from utils.logger import LoggerMixin
+from utils.i18n import tr
 
 
 class DownloadThread(QThread):
@@ -105,17 +106,17 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
         layout.setContentsMargins(0, 0, 0, 0)
         
         # Título
-        title = QLabel("📥 Gerenciador de Downloads do OptiScaler")
+        title = QLabel(tr("dl_manager_title"))
         title_font = QFont()
         title_font.setPointSize(14)
         title_font.setBold(True)
         title.setFont(title_font)
         layout.addWidget(title)
-        
+
         layout.addStretch()
-        
+
         # Botão atualizar
-        refresh_btn = QPushButton("🔄 Atualizar Lista")
+        refresh_btn = QPushButton(tr("dl_refresh_btn"))
         refresh_btn.clicked.connect(self._fetch_versions)
         layout.addWidget(refresh_btn)
         
@@ -126,7 +127,8 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
         table = QTableWidget()
         table.setColumnCount(6)
         table.setHorizontalHeaderLabels([
-            "Versão", "Nome", "Data", "Tamanho", "Status", "Ação"
+            tr("dl_col_version"), tr("dl_col_name"), tr("dl_col_date"),
+            tr("dl_col_size"), tr("dl_col_status"), tr("dl_col_action"),
         ])
         
         # Configurar colunas
@@ -187,15 +189,15 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
         layout.setContentsMargins(0, 0, 0, 0)
         
         # Info
-        info = QLabel("💡 Baixe versões do OptiScaler para instalá-las em seus jogos sem precisar consultar o GitHub toda vez.")
+        info = QLabel(tr("dl_hint"))
         info.setWordWrap(True)
         info.setStyleSheet("color: #666; font-size: 11px; padding: 10px;")
         layout.addWidget(info)
-        
+
         layout.addStretch()
-        
+
         # Botão limpar cache
-        clear_btn = QPushButton("🗑️ Limpar Cache")
+        clear_btn = QPushButton(tr("dl_clear_cache_btn"))
         clear_btn.clicked.connect(self._clear_cache)
         layout.addWidget(clear_btn)
         
@@ -219,7 +221,7 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
         
         except Exception as e:
             self.logger.error(f"Erro ao carregar versões: {e}")
-            QMessageBox.warning(self, "Erro", f"Erro ao carregar versões: {e}")
+            QMessageBox.warning(self, tr("error_title"), tr("dl_load_error_msg", error=e))
     
     def _fetch_versions(self):
         """Busca versões do GitHub"""
@@ -230,41 +232,41 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
             sender = self.sender()
             if sender:
                 sender.setEnabled(False)
-                sender.setText("⏳ Buscando...")
-            
+                sender.setText(tr("dl_fetching"))
+
             # Buscar versões
             versions = self.fetch_versions_uc.execute(include_prerelease=True)
             count = len(versions)
 
             if count > 0:
-                self.logger.info(f"✓ {count} versões encontradas")
+                self.logger.info(tr("dl_fetch_ok", count=count))
                 self._load_versions()
                 QMessageBox.information(
                     self,
-                    "Sucesso",
-                    f"✓ {count} versões encontradas no GitHub"
+                    tr("dl_fetch_ok_title"),
+                    tr("dl_fetch_ok_msg", count=count)
                 )
             else:
-                self.logger.warning("Nenhuma versão encontrada")
+                self.logger.warning(tr("dl_fetch_none"))
                 QMessageBox.warning(
                     self,
-                    "Aviso",
-                    "Nenhuma versão encontrada no GitHub"
+                    tr("warning_title"),
+                    tr("dl_fetch_none_msg")
                 )
-        
+
         except Exception as e:
             self.logger.error(f"Erro ao buscar versões: {e}")
             QMessageBox.critical(
                 self,
-                "Erro",
-                f"Erro ao buscar versões:\n{str(e)}"
+                tr("error_title"),
+                tr("dl_fetch_error_msg", error=str(e))
             )
-        
+
         finally:
             # Reabilitar botão
             if sender:
                 sender.setEnabled(True)
-                sender.setText("🔄 Atualizar Lista")
+                sender.setText(tr("dl_refresh_btn"))
     
     def _update_table(self):
         """Atualiza tabela com versões"""
@@ -296,16 +298,16 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
             
             # Status
             if version.is_downloaded:
-                status_item = QTableWidgetItem("✓ Baixado")
-                status_item.setForeground(QColor("#6c9010"))  # Verde claro
+                status_item = QTableWidgetItem(tr("dl_status_downloaded"))
+                status_item.setForeground(QColor("#6c9010"))
             else:
-                status_item = QTableWidgetItem("⬇ Não baixado")
-                status_item.setForeground(QColor("#8b939c"))  # Cinza claro
+                status_item = QTableWidgetItem(tr("dl_status_pending"))
+                status_item.setForeground(QColor("#8b939c"))
             self.versions_table.setItem(row, 4, status_item)
-            
+
             # Botão de ação — dentro de container para margens corretas
             if version.is_downloaded:
-                btn = QPushButton("🗑️ Remover")
+                btn = QPushButton(tr("dl_btn_remove"))
                 btn.clicked.connect(lambda checked, v=version: self._delete_version(v))
                 btn.setStyleSheet("""
                     QPushButton {
@@ -320,7 +322,7 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
                     QPushButton:pressed { background-color: #a52828; }
                 """)
             else:
-                btn = QPushButton("⬇ Baixar")
+                btn = QPushButton(tr("dl_btn_download"))
                 btn.clicked.connect(lambda checked, v=version: self._download_version(v))
                 btn.setStyleSheet("""
                     QPushButton {
@@ -350,20 +352,15 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
         
         total_size = sum(v.file_size for v in self.versions if v.is_downloaded)
         size_mb = total_size / (1024 * 1024)
-        
+
         self.cache_info_label.setText(
-            f"📊 {downloaded}/{total} versões baixadas | "
-            f"💾 {size_mb:.1f} MB em cache"
+            tr("dl_cache_info", downloaded=downloaded, total=total, size_mb=size_mb)
         )
     
     def _download_version(self, version: OptiScalerVersion):
         """Faz download de uma versão"""
         if self.current_download and self.current_download.isRunning():
-            QMessageBox.warning(
-                self,
-                "Aviso",
-                "Já existe um download em andamento"
-            )
+            QMessageBox.warning(self, tr("warning_title"), tr("dl_busy_msg"))
             return
         
         self.logger.info(f"Iniciando download de {version.tag_name}")
@@ -386,7 +383,9 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
             
             downloaded_mb = downloaded / (1024 * 1024)
             total_mb = total / (1024 * 1024)
-            self.progress_bar.setFormat(f"{downloaded_mb:.1f}/{total_mb:.1f} MB ({percentage}%)")
+            self.progress_bar.setFormat(
+                tr("dl_progress_fmt", downloaded_mb=downloaded_mb, total_mb=total_mb, pct=percentage)
+            )
     
     def _on_download_finished(self, success: bool, message: str):
         """Handler para conclusão do download"""
@@ -404,76 +403,76 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
         """Remove uma versão baixada"""
         reply = QMessageBox.question(
             self,
-            "Confirmar Remoção",
-            f"Deseja remover {version.tag_name} do cache?",
+            tr("dl_remove_title"),
+            tr("dl_remove_msg", version=version.tag_name),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
+
         if reply == QMessageBox.StandardButton.Yes:
             try:
                 if version.local_path and version.local_path.exists():
                     version.local_path.unlink()
                     self.logger.info(f"✓ Versão {version.tag_name} removida")
-                    
+
                     # Atualizar banco
                     version.is_downloaded = False
                     version.local_path = None
-                    
+
                     with self.db_service.get_connection() as conn:
                         version_repo = VersionRepository(conn)
                         version_repo.save(version)
-                    
+
                     self._load_versions()
                     QMessageBox.information(
                         self,
-                        "Sucesso",
-                        f"✓ {version.tag_name} removido do cache"
+                        tr("dl_fetch_ok_title"),
+                        tr("dl_remove_ok_msg", version=version.tag_name)
                     )
-            
+
             except Exception as e:
                 self.logger.error(f"Erro ao remover versão: {e}")
-                QMessageBox.critical(self, "Erro", f"Erro ao remover: {e}")
+                QMessageBox.critical(self, tr("error_title"), tr("dl_remove_error_msg", error=e))
     
     def _clear_cache(self):
         """Limpa todo o cache"""
         downloaded = sum(1 for v in self.versions if v.is_downloaded)
         
         if downloaded == 0:
-            QMessageBox.information(self, "Info", "Não há versões baixadas no cache")
+            QMessageBox.information(self, tr("info_title"), tr("dl_no_cache_msg"))
             return
-        
+
         reply = QMessageBox.question(
             self,
-            "Confirmar Limpeza",
-            f"Deseja remover TODAS as {downloaded} versões baixadas?",
+            tr("dl_clear_title"),
+            tr("dl_clear_msg", count=downloaded),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
+
         if reply == QMessageBox.StandardButton.Yes:
             try:
                 removed = 0
                 with self.db_service.get_connection() as conn:
                     version_repo = VersionRepository(conn)
-                    
+
                     for version in self.versions:
                         if version.is_downloaded and version.local_path:
                             if version.local_path.exists():
                                 version.local_path.unlink()
                                 removed += 1
-                            
+
                             version.is_downloaded = False
                             version.local_path = None
                             version_repo.save(version)
-                
+
                 self.logger.info(f"✓ {removed} versões removidas do cache")
                 self._load_versions()
-                
+
                 QMessageBox.information(
                     self,
-                    "Sucesso",
-                    f"✓ {removed} versões removidas do cache"
+                    tr("dl_fetch_ok_title"),
+                    tr("dl_clear_ok_msg", count=removed)
                 )
-            
+
             except Exception as e:
                 self.logger.error(f"Erro ao limpar cache: {e}")
-                QMessageBox.critical(self, "Erro", f"Erro ao limpar cache: {e}")
+                QMessageBox.critical(self, tr("error_title"), tr("dl_clear_error_msg", error=e))

@@ -33,7 +33,8 @@ try:
     from PyQt6.QtCore import Qt
     
     from utils.logger import setup_logger
-    from utils.constants import APP_NAME, APP_VERSION
+    from utils.constants import APP_NAME, APP_VERSION, LOCALES_DIR
+    from utils.i18n import init_i18n
     from infrastructure.config.config_service import ConfigService
     from infrastructure.database.db_service import DatabaseService
     from presentation.main_window import MainWindow
@@ -60,6 +61,11 @@ def main():
         logger.info("Inicializando serviços...")
         config_service = ConfigService()
         db_service = DatabaseService()
+
+        # Inicializar i18n
+        language = config_service.get('general.language', 'pt_BR')
+        init_i18n(LOCALES_DIR, language)
+        logger.info(f"Idioma: {language}")
         
         # Criar aplicação Qt
         app = QApplication(sys.argv)

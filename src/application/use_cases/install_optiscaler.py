@@ -123,7 +123,8 @@ class InstallOptiScalerUseCase(LoggerMixin):
                     self.logger.info(f"FSR4 SDK: {fsr4_variant}")
                 self.logger.info("=" * 60)
 
-                game_dir = game.path
+                game_dir = self._determine_install_directory(game.path)
+                self.logger.info(f"Diretório de instalação: {game_dir}")
 
                 # 1. Extrair para pasta temporária
                 self.logger.info("[1/4] Extraindo OptiScaler...")
@@ -312,6 +313,92 @@ class InstallOptiScalerUseCase(LoggerMixin):
             json.dumps(manifest, indent=2), encoding='utf-8'
         )
 
+    def _determine_install_directory(self, game_path: Path) -> Path:
+        """
+        Determina o diretório correto de instalação do OptiScaler para o jogo.
+        Aplica heurísticas para jogos com estrutura Unreal Engine (Binaries/Win64 ou similar).
+
+        Prioridade:
+          1. Phoenix/Binaries/Win64 (jogos UE5 como Satisfactory, etc.)
+          2. <GameName>/Binaries/Win64
+          3. Binaries/Win64 diretamente
+          4. Diretório do executável principal (maior score por tamanho + DLLs de upscaling)
+          5. game_path como fallback
+        """
+        # Regra 1: estrutura Phoenix (UE5)
+        phoenix_path = game_path / "Phoenix" / "Binaries" / "Win64"
+        if phoenix_path.exists() and any(phoenix_path.glob("*.exe")):
+            self.logger.info(f"Detectada estrutura Phoenix UE5: {phoenix_path}")
+            return phoenix_path
+
+        # Regra 2: Binaries/Win64 direto ou <Sub>/Binaries/Win64
+        for candidate in [
+            game_path / "Binaries" / "Win64",
+            *(p / "Binaries" / "Win64" for p in game_path.iterdir() if p.is_dir()),
+        ]:
+            try:
+                if candidate.exists() and any(candidate.glob("*.exe")):
+                    self.logger.info(f"Detectada estrutura UE Binaries: {candidate}")
+                    return candidate
+            except PermissionError:
+                continue
+
+        # Regra 3: diretório do executável principal (heurística por score)
+        best_dir = self._find_best_exe_dir(game_path)
+        if best_dir:
+            return best_dir
+
+        return game_path
+
+    def _find_best_exe_dir(self, game_path: Path) -> Optional[Path]:
+        """Encontra o diretório do executável principal usando heurística de score."""
+        try:
+            exe_files = list(game_path.rglob("*.exe"))
+        except PermissionError:
+            return None
+
+        SKIP_NAMES = {
+            "unins", "setup", "installer", "crash", "redist",
+            "prerequisites", "unrealeditor", "unrealcefsubprocess",
+        }
+
+        UPSCALING_DLLS = {
+            "nvngx_dlss.dll", "nvngx.dll", "amd_fidelityfx_dx12.dll",
+            "ffx_fsr2_api_dx12_x64.dll", "libxess.dll",
+        }
+
+        best_score = -1
+        best_dir: Optional[Path] = None
+
+        for exe in exe_files:
+            name = exe.stem.lower()
+            if any(skip in name for skip in SKIP_NAMES):
+                continue
+
+            score = 0
+            try:
+                if exe.stat().st_size > 5 * 1024 * 1024:
+                    score += 10
+            except OSError:
+                pass
+
+            exe_dir = exe.parent
+            try:
+                dir_dlls = {f.name.lower() for f in exe_dir.glob("*.dll")}
+                if dir_dlls & UPSCALING_DLLS:
+                    score += 25
+            except PermissionError:
+                pass
+
+            if "binaries" in str(exe_dir).lower():
+                score += 5
+
+            if score > best_score:
+                best_score = score
+                best_dir = exe_dir
+
+        return best_dir
+
     def _restore_backup(self, backup: Backup, game_dir: Path):
         """Restaura arquivos do backup em caso de erro."""
         try:
@@ -324,5 +411,3 @@ class InstallOptiScalerUseCase(LoggerMixin):
             self.logger.info("Backup restaurado após falha")
         except Exception as e:
             self.logger.error(f"Erro ao restaurar backup: {e}")
-        except Exception as e:
-            self.logger.error(f"Erro ao limpar arquivos: {e}")

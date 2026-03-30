@@ -15,6 +15,7 @@ import shutil
 from domain.entities.game import Game
 from domain.enums.installation_status import InstallationStatus
 from presentation.styles.modern_theme import GAME_CARD_STYLE
+from utils.i18n import tr
 
 
 class GameCardWidget(QFrame):
@@ -81,7 +82,7 @@ class GameCardWidget(QFrame):
         
         # Status de instalação
         if self.game.installation_status == InstallationStatus.INSTALLED:
-            installed_label = QLabel("✓ OptiScaler Instalado")
+            installed_label = QLabel(tr("card_installed"))
             installed_label.setObjectName("installed")
             info_layout.addWidget(installed_label)
         
@@ -111,16 +112,14 @@ class GameCardWidget(QFrame):
         button_layout.setSpacing(8)
         
         if self.game.installation_status == InstallationStatus.INSTALLED:
-            # Botão de desinstalar
-            uninstall_btn = QPushButton("Desinstalar")
+            uninstall_btn = QPushButton(tr("card_btn_uninstall"))
             uninstall_btn.setObjectName("danger")
             uninstall_btn.setMaximumWidth(130)
             uninstall_btn.clicked.connect(lambda: self.uninstall_requested.emit(self.game))
             button_layout.addWidget(uninstall_btn)
         else:
-            # Botão de instalar
             if len(self.game.supported_dlls) > 0:
-                install_btn = QPushButton("Instalar")
+                install_btn = QPushButton(tr("card_btn_install"))
                 install_btn.setMaximumWidth(130)
                 install_btn.clicked.connect(lambda: self.install_requested.emit(self.game))
                 button_layout.addWidget(install_btn)
@@ -324,13 +323,13 @@ class GameCardWidget(QFrame):
         menu = QMenu(self)
         
         # Ações
-        install_action = menu.addAction("⚙ Instalar OptiScaler")
-        uninstall_action = menu.addAction("✗ Desinstalar OptiScaler")
+        install_action = menu.addAction(tr("card_menu_install"))
+        uninstall_action = menu.addAction(tr("card_menu_uninstall"))
         menu.addSeparator()
-        configure_action = menu.addAction("⚙️ Configurações")
-        change_image_action = menu.addAction("🖼️ Alterar Imagem")
+        configure_action = menu.addAction(tr("card_menu_settings"))
+        change_image_action = menu.addAction(tr("card_menu_image"))
         menu.addSeparator()
-        info_action = menu.addAction("ℹ Ver Detalhes")
+        info_action = menu.addAction(tr("card_menu_details"))
         
         # Habilitar/desabilitar baseado no estado
         install_action.setEnabled(
@@ -382,9 +381,9 @@ class GameCardWidget(QFrame):
         """Abre diálogo para selecionar nova imagem"""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Selecionar Imagem do Jogo",
+            tr("card_img_dialog_title"),
             str(Path.home()),
-            "Imagens (*.png *.jpg *.jpeg *.bmp);;Todos os arquivos (*)"
+            tr("card_img_dialog_filter")
         )
         
         if file_path:
@@ -418,6 +417,6 @@ class GameCardWidget(QFrame):
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self,
-                "Erro",
-                f"Falha ao definir imagem:\n{e}"
+                tr("error_title"),
+                tr("card_img_error_msg", error=e)
             )
