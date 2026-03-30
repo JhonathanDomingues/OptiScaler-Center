@@ -26,6 +26,9 @@ ENV/
 *~
 .DS_Store
 
+# Claude AI
+.claude/
+
 # Application specific
 data/games.db
 data/games.db-journal
