@@ -2,6 +2,7 @@
 Serviço para interagir com GitHub API
 Download de releases do OptiScaler
 """
+import re
 import requests
 from pathlib import Path
 from typing import List, Optional, Dict, Callable
@@ -19,21 +20,36 @@ class GitHubService(LoggerMixin):
     REPO_NAME = "OptiScaler"
     API_BASE = "https://api.github.com"
     
-    def __init__(self, cache_dir: Path):
+    def __init__(self, cache_dir: Path, token: str = ""):
         """
         Inicializa o serviço
         
         Args:
             cache_dir: Diretório para cache de downloads
+            token: GitHub Personal Access Token (opcional, necessário para artefatos de Actions)
         """
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._token = token
         
         # Headers para API do GitHub
         self.headers = {
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'OptiScaler-Center'
         }
+        self._update_auth_headers()
+
+    def set_token(self, token: str):
+        """Define/atualiza o token de autenticação."""
+        self._token = token
+        self._update_auth_headers()
+
+    def _update_auth_headers(self):
+        """Atualiza headers com token de autenticação, se disponível."""
+        if self._token:
+            self.headers['Authorization'] = f'Bearer {self._token}'
+        else:
+            self.headers.pop('Authorization', None)
     
     def fetch_releases(self, include_prerelease: bool = True) -> List[OptiScalerVersion]:
         """
@@ -230,7 +246,162 @@ class GitHubService(LoggerMixin):
         
         except Exception as e:
             self.logger.error(f"Erro ao limpar cache: {e}")
-    
+
+    # ------------------------------------------------------------------
+    # GitHub Actions — betas / workflow artifacts
+    # ------------------------------------------------------------------
+
+    def fetch_beta_builds(
+        self,
+        repo: str = "cdozdil/OptiScaler",
+        workflow: str = "release_debug.yml",
+        branch_pattern: str = r'release/0\.[0-9].*',
+        limit: int = 20
+    ) -> List[OptiScalerVersion]:
+        """
+        Busca betas a partir de runs do workflow GitHub Actions.
+
+        Requer token configurado (set_token) para baixar artefatos.
+        Sem token, apenas lista os artefatos disponíveis.
+
+        Args:
+            repo:           "owner/repo" do repositório
+            workflow:       nome do arquivo de workflow (ex: release_debug.yml)
+            branch_pattern: regex para filtrar branches (ex: r'release/0\\.[0-9].*')
+            limit:          número máximo de runs a inspecionar
+        Returns:
+            Lista de OptiScalerVersion representando os betas encontrados
+        """
+        owner, name = repo.split('/', 1) if '/' in repo else (self.REPO_OWNER, self.REPO_NAME)
+        self.logger.info(f"Buscando betas via Actions ({repo} / {workflow})...")
+
+        # 1. Listar workflow runs
+        url = f"{self.API_BASE}/repos/{owner}/{name}/actions/workflows/{workflow}/runs"
+        params = {"status": "success", "per_page": min(limit, 100)}
+        try:
+            resp = requests.get(url, headers=self.headers, params=params, timeout=15)
+            resp.raise_for_status()
+            runs = resp.json().get("workflow_runs", [])
+        except requests.RequestException as e:
+            self.logger.error(f"Erro ao listar workflow runs: {e}")
+            return []
+
+        # 2. Filtrar por branch
+        try:
+            pat = re.compile(branch_pattern)
+        except re.error:
+            pat = re.compile(re.escape(branch_pattern))
+
+        versions: List[OptiScalerVersion] = []
+        seen_branches: set = set()
+
+        for run in runs:
+            branch = run.get("head_branch", "")
+            if not pat.search(branch):
+                continue
+            if branch in seen_branches:
+                continue
+            seen_branches.add(branch)
+
+            run_id = run["id"]
+            created_at = datetime.strptime(run["created_at"], '%Y-%m-%dT%H:%M:%SZ')
+            tag = branch.replace("/", "-")  # ex: release-0.9.5
+
+            # 3. Listar artefatos do run
+            arts_url = f"{self.API_BASE}/repos/{owner}/{name}/actions/runs/{run_id}/artifacts"
+            try:
+                arts_resp = requests.get(arts_url, headers=self.headers, timeout=10)
+                arts_resp.raise_for_status()
+                artifacts = arts_resp.json().get("artifacts", [])
+            except requests.RequestException as e:
+                self.logger.warning(f"Erro ao listar artefatos do run {run_id}: {e}")
+                artifacts = []
+
+            # Preferir artefato com zip ou nome contendo "OptiScaler"
+            art = None
+            for a in artifacts:
+                aname = a["name"].lower()
+                if "optiscaler" in aname or aname.endswith(".zip") or aname.endswith(".7z"):
+                    art = a
+                    break
+            if not art and artifacts:
+                art = artifacts[0]
+
+            if art:
+                filename = f"{art['name']}.zip"
+                cache_path = self.cache_dir / filename
+                is_downloaded = cache_path.exists()
+
+                version = OptiScalerVersion(
+                    tag_name=tag,
+                    name=f"Beta: {branch} ({run['head_sha'][:7]})",
+                    description=f"Build de workflow: {branch}\nRun: {run_id}",
+                    release_date=created_at,
+                    is_prerelease=True,
+                    download_url=art.get("archive_download_url", ""),
+                    total_size=art.get("size_in_bytes", 0),
+                    cache_path=cache_path if is_downloaded else None,
+                    is_downloaded=is_downloaded,
+                )
+                # Guarda ID do artefato para download posterior
+                version.github_id = art["id"]
+                versions.append(version)
+
+        self.logger.info(f"✓ {len(versions)} betas encontrados")
+        return versions
+
+    def download_artifact(
+        self,
+        artifact_id: int,
+        output_path: Path,
+        progress_callback: Optional[Callable[[int, int], None]] = None
+    ) -> Optional[Path]:
+        """
+        Faz download de um artefato do GitHub Actions.
+
+        Requer token de autenticação configurado via set_token().
+
+        Args:
+            artifact_id:       ID numérico do artefato
+            output_path:       Caminho destino do arquivo
+            progress_callback: Callback (bytes_baixados, total)
+        Returns:
+            Path do arquivo ou None em caso de erro
+        """
+        if not self._token:
+            self.logger.error("Token GitHub não configurado — necessário para baixar artefatos de Actions")
+            return None
+
+        url = f"{self.API_BASE}/repos/{self.REPO_OWNER}/{self.REPO_NAME}/actions/artifacts/{artifact_id}/zip"
+        self.logger.info(f"Baixando artefato {artifact_id}...")
+
+        try:
+            resp = requests.get(url, headers=self.headers, stream=True, timeout=30, allow_redirects=True)
+            resp.raise_for_status()
+
+            total = int(resp.headers.get('content-length', 0))
+            downloaded = 0
+            temp = output_path.with_suffix('.tmp')
+
+            with open(temp, 'wb') as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if progress_callback:
+                            progress_callback(downloaded, total)
+
+            temp.rename(output_path)
+            self.logger.info(f"✓ Artefato baixado: {output_path.name}")
+            return output_path
+
+        except requests.RequestException as e:
+            self.logger.error(f"Erro ao baixar artefato: {e}")
+            temp = output_path.with_suffix('.tmp')
+            if temp.exists():
+                temp.unlink()
+            return None
+
     def _parse_release(self, release_data: Dict) -> Optional[OptiScalerVersion]:
         """
         Parseia dados de release do GitHub para OptiScalerVersion

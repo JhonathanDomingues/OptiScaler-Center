@@ -36,6 +36,8 @@ optional_dirs = [
     ('resources/fsr4_sdk', 'resources/fsr4_sdk'),
     ('resources/locales',  'resources/locales'),
     ('resources/icons',    'resources/icons'),
+    # DLLs int8 versionadas da pasta de desenvolvimento → empacotadas como resources/fsr4_sdk/int8
+    ('SDK DLL/DLL INT8',   'resources/fsr4_sdk/int8'),
 ]
 
 for src, dst in optional_dirs:
@@ -136,6 +138,7 @@ hiddenimports = [
     'presentation.styles',
     'presentation.styles.modern_theme',
     'presentation.widgets',
+    'presentation.widgets.settings_dialog',
 ]
 
 # Binaries específicos (vazio por padrão, PyInstaller detecta automaticamente)

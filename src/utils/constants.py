@@ -20,14 +20,15 @@ if getattr(sys, 'frozen', False):
     SRC_DIR = BASE_DIR  # No executável, tudo está no mesmo nível
     _xdg_data = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     USER_DATA_DIR = _xdg_data / "optiscaler-center"
+    # Recursos somente-leitura (locales, ícones, sdk) ficam em _MEIPASS no PyInstaller
+    _meipass = Path(getattr(sys, '_MEIPASS', BASE_DIR))
+    RESOURCES_DIR = _meipass / "resources"
 else:
     # Rodando como script Python normal
     BASE_DIR = Path(__file__).parent.parent.parent
     SRC_DIR = Path(__file__).parent.parent
     USER_DATA_DIR = BASE_DIR
-
-# Paths base
-RESOURCES_DIR = BASE_DIR / "resources"
+    RESOURCES_DIR = BASE_DIR / "resources"
 
 # Paths graváveis (usam USER_DATA_DIR quando empacotado)
 DATA_DIR = USER_DATA_DIR / "data"
@@ -38,8 +39,9 @@ DATABASE_PATH = DATA_DIR / "games.db"
 CONFIG_PATH = DATA_DIR / "config.yaml"
 BACKUPS_DIR = DATA_DIR / "backups"
 CACHE_DIR = USER_DATA_DIR / "optiscaler_cache"  # gravável
-FSR4_SDK_DIR  = RESOURCES_DIR / "fsr4_sdk"       # somente-leitura (bundled)
-LOCALES_DIR   = RESOURCES_DIR / "locales"        # somente-leitura (bundled)
+FSR4_SDK_DIR       = RESOURCES_DIR / "fsr4_sdk"         # somente-leitura (bundled)
+FSR4_USER_SDK_DIR  = USER_DATA_DIR / "fsr4_sdk"         # gravável (DLLs adicionadas pelo usuário)
+LOCALES_DIR        = RESOURCES_DIR / "locales"          # somente-leitura (bundled)
 
 # URLs
 OPTISCALER_REPO = "cdozdil/OptiScaler"
@@ -135,7 +137,7 @@ LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR']
 # Default configuration
 DEFAULT_CONFIG = {
     'general': {
-        'language': 'pt-BR',
+        'language': 'pt_BR',
         'theme': 'dark',
         'check_updates_on_startup': True,
         'minimize_to_tray': True
@@ -161,7 +163,18 @@ DEFAULT_CONFIG = {
     },
     'fsr4_sdk': {
         'use_int8': False,
-        'default_enabled': False
+        'default_enabled': False,
+        # Permite sobrepor as DLLs padrão com caminhos externos (str)
+        'custom_standard_dlls': {},     # {'amd_fidelityfx_dx12.dll': '/path/to/dll', ...}
+        'custom_int8_versions': {},     # {'4.0.1': '/path/to/dll', '4.0.2c': '/path/to/dll'}
+    },
+    'github': {
+        'token': '',                             # Personal Access Token (para baixar artefatos de Actions)
+        'stable_repo': 'cdozdil/OptiScaler',
+        'beta_repo': 'cdozdil/OptiScaler',
+        'beta_workflow': 'release_debug.yml',
+        'beta_branch_pattern': r'release/0\.[0-9].*',
+        'show_betas': False,
     },
     'network': {
         'download_threads': 4,

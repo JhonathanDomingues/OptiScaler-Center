@@ -5,7 +5,7 @@ Layout em grid com cards de jogos estilo Steam
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
     QGridLayout, QGroupBox, QLabel, QPushButton, QComboBox, QProgressBar, QMessageBox,
-    QTextEdit, QDialog, QDialogButtonBox, QSplitter
+    QTextEdit, QDialog, QDialogButtonBox, QSplitter, QCheckBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtGui import QIcon
@@ -18,7 +18,7 @@ from domain.enums.installation_status import InstallationStatus
 from application.use_cases.scan_games import ScanGamesUseCase
 from application.use_cases.fetch_versions import FetchVersionsUseCase
 from application.use_cases.download_version import DownloadVersionUseCase
-from application.use_cases.install_optiscaler import InstallOptiScalerUseCase, SUPPORTED_LOADER_DLLS
+from application.use_cases.install_optiscaler import InstallOptiScalerUseCase, SUPPORTED_LOADER_DLLS, get_int8_versions
 from application.use_cases.uninstall_optiscaler import UninstallOptiScalerUseCase
 from presentation.widgets.game_card_widget import GameCardWidget
 from presentation.styles.modern_theme import MODERN_THEME
@@ -66,15 +66,17 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         fetch_versions_uc: FetchVersionsUseCase,
         download_version_uc: DownloadVersionUseCase,
         install_uc: InstallOptiScalerUseCase,
-        uninstall_uc: UninstallOptiScalerUseCase
+        uninstall_uc: UninstallOptiScalerUseCase,
+        config=None,
     ):
         super().__init__()
-        
+
         self.scan_games_uc = scan_games_uc
         self.fetch_versions_uc = fetch_versions_uc
         self.download_version_uc = download_version_uc
         self.install_uc = install_uc
         self.uninstall_uc = uninstall_uc
+        self._config = config
         
         self.current_game: Optional[Game] = None
         self.games: List[Game] = []
@@ -394,14 +396,20 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             self.logger.error(f"Erro ao verificar versões: {e}")
         
         # Mostrar diálogo de instalação
-        dialog = InstallDialog(game, self.fetch_versions_uc, self)
+        dialog = InstallDialog(game, self.fetch_versions_uc, self, config=self._config)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            version_id = dialog.selected_version_id
-            loader_dll = dialog.selected_loader
-            fsr4_variant = dialog.selected_fsr4
+            version_id            = dialog.selected_version_id
+            loader_dll            = dialog.selected_loader
+            fsr4_variant          = dialog.selected_fsr4
+            fsr4_int8_version     = dialog.selected_int8_version
+            custom_standard_dlls  = dialog.custom_standard_dlls
 
             if version_id:
-                self._install_optiscaler(game, version_id, loader_dll, fsr4_variant)
+                self._install_optiscaler(
+                    game, version_id, loader_dll,
+                    fsr4_variant, fsr4_int8_version,
+                    custom_standard_dlls=custom_standard_dlls,
+                )
     
     def _on_uninstall_requested(self, game: Game):
         """Callback quando desinstalação é solicitada"""
@@ -417,13 +425,18 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         if reply == QMessageBox.StandardButton.Yes:
             self._uninstall_optiscaler(game)
     
-    def _install_optiscaler(self, game: Game, version_id: int, loader_dll: str = "dxgi.dll", fsr4_variant=None):
+    def _install_optiscaler(
+        self, game: Game, version_id: int, loader_dll: str = "dxgi.dll",
+        fsr4_variant=None, fsr4_int8_version=None, custom_standard_dlls: dict = None
+    ):
         """Instala OptiScaler no jogo"""
         try:
             success = self.install_uc.execute(
                 game.id, version_id,
                 loader_dll=loader_dll,
-                fsr4_variant=fsr4_variant
+                fsr4_variant=fsr4_variant,
+                fsr4_int8_version=fsr4_int8_version,
+                custom_standard_dlls=custom_standard_dlls or {},
             )
             
             if success:
@@ -517,17 +530,20 @@ class GameDetailsDialog(QDialog):
 class InstallDialog(QDialog):
     """Diálogo de instalação do OptiScaler"""
 
-    def __init__(self, game: Game, fetch_versions_uc, parent=None):
+    def __init__(self, game: Game, fetch_versions_uc, parent=None, config=None):
         super().__init__(parent)
         self.game = game
         self.fetch_versions_uc = fetch_versions_uc
+        self._config = config
 
-        self.selected_version_id = None
-        self.selected_loader = "dxgi.dll"
-        self.selected_fsr4 = None
+        self.selected_version_id   = None
+        self.selected_loader       = "dxgi.dll"
+        self.selected_fsr4         = None
+        self.selected_int8_version = None
+        self.custom_standard_dlls  = {}
 
         self.setWindowTitle(tr("install_dialog_title", game=game.name))
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(460)
 
         self._init_ui()
         self._load_versions()
@@ -548,13 +564,26 @@ class InstallDialog(QDialog):
             self.loader_combo.addItem(dll, dll)
         layout.addWidget(self.loader_combo)
 
-        # Seletor de FSR4 SDK
+        # FSR4 SDK — checkbox para habilitar + combo para int8
         layout.addWidget(QLabel(tr("install_dialog_fsr4")))
-        self.fsr4_combo = QComboBox()
-        self.fsr4_combo.addItem(tr("install_dialog_fsr4_none"), None)
-        self.fsr4_combo.addItem(tr("install_dialog_fsr4_std"),  "standard")
-        self.fsr4_combo.addItem(tr("install_dialog_fsr4_int8"), "int8")
-        layout.addWidget(self.fsr4_combo)
+
+        self.fsr4_check = QCheckBox(tr("install_dialog_fsr4_std"))
+        self.fsr4_check.setChecked(False)
+        self.fsr4_check.toggled.connect(self._on_fsr4_toggled)
+        layout.addWidget(self.fsr4_check)
+
+        # Int8 (sub-opção)
+        int8_row = QWidget()
+        int8_layout = QHBoxLayout(int8_row)
+        int8_layout.setContentsMargins(20, 0, 0, 0)
+        int8_layout.addWidget(QLabel(tr("install_dialog_fsr4_int8")))
+        self.int8_combo = QComboBox()
+        self.int8_combo.addItem(tr("install_dialog_fsr4_int8_none"), None)
+        self._populate_int8_combo()
+        int8_layout.addWidget(self.int8_combo)
+        int8_row.setEnabled(False)
+        self._int8_row = int8_row
+        layout.addWidget(int8_row)
 
         # Botões
         buttons = QDialogButtonBox(
@@ -565,6 +594,20 @@ class InstallDialog(QDialog):
         layout.addWidget(buttons)
 
         self.setLayout(layout)
+
+    def _populate_int8_combo(self):
+        """Popula combo com versões int8 disponíveis."""
+        try:
+            versions = get_int8_versions()
+            for name in sorted(versions.keys()):
+                self.int8_combo.addItem(name, name)
+        except Exception:
+            pass
+
+    def _on_fsr4_toggled(self, checked: bool):
+        self._int8_row.setEnabled(checked)
+        if not checked:
+            self.int8_combo.setCurrentIndex(0)  # reset para "Não"
 
     def _load_versions(self):
         """Carrega versões disponíveis"""
@@ -578,8 +621,15 @@ class InstallDialog(QDialog):
 
     def _on_accept(self):
         """Confirma seleção"""
-        self.selected_version_id = self.version_combo.currentData()
-        self.selected_loader = self.loader_combo.currentData() or "dxgi.dll"
-        self.selected_fsr4 = self.fsr4_combo.currentData()
+        self.selected_version_id   = self.version_combo.currentData()
+        self.selected_loader       = self.loader_combo.currentData() or "dxgi.dll"
+        self.selected_fsr4         = "standard" if self.fsr4_check.isChecked() else None
+        self.selected_int8_version = self.int8_combo.currentData() if self.fsr4_check.isChecked() else None
+
+        # Carregar substituições de DLLs padrão definidas nas configurações
+        if self._config is not None:
+            self.custom_standard_dlls = dict(
+                self._config.get('fsr4_sdk.custom_standard_dlls', {}) or {}
+            )
 
         self.accept()

@@ -22,6 +22,7 @@ from application.use_cases.install_optiscaler import InstallOptiScalerUseCase
 from application.use_cases.uninstall_optiscaler import UninstallOptiScalerUseCase
 from presentation.widgets.game_library_widget_modern import GameLibraryWidget
 from presentation.widgets.downloads_manager_widget import DownloadsManagerWidget
+from presentation.widgets.settings_dialog import SettingsDialog
 from presentation.styles.modern_theme import apply_modern_theme, MODERN_THEME
 from presentation.resources.app_icon import create_app_icon
 from utils.logger import LoggerMixin
@@ -46,7 +47,8 @@ class MainWindow(QMainWindow, LoggerMixin):
         """Inicializa todos os serviços e use cases"""
         # Serviços de infraestrutura
         self.steam_service = SteamService()
-        self.github_service = GitHubService(CACHE_DIR)
+        token = self.config.get('github.token', '')
+        self.github_service = GitHubService(CACHE_DIR, token=token)
 
         # Serviços de aplicação
         self.dll_analyzer = DLLAnalyzer(max_depth=3)
@@ -141,7 +143,8 @@ class MainWindow(QMainWindow, LoggerMixin):
             self.fetch_versions_uc,
             self.download_version_uc,
             self.install_uc,
-            self.uninstall_uc
+            self.uninstall_uc,
+            config=self.config,
         )
         tabs.addTab(self.library_widget, tr("tab_library"))
 
@@ -149,7 +152,9 @@ class MainWindow(QMainWindow, LoggerMixin):
         self.downloads_widget = DownloadsManagerWidget(
             self.fetch_versions_uc,
             self.download_version_uc,
-            self.database
+            self.database,
+            github_service=self.github_service,
+            config=self.config,
         )
         tabs.addTab(self.downloads_widget, tr("tab_downloads"))
 
@@ -265,7 +270,19 @@ class MainWindow(QMainWindow, LoggerMixin):
     def _on_settings(self):
         """Handler para configurações"""
         self.logger.info("Abrindo configurações")
-        self.statusBar().showMessage(tr("settings_wip"))
+        dialog = SettingsDialog(self.config, self)
+        if dialog.exec():
+            # Aplicar token atualizado no serviço GitHub
+            token = self.config.get('github.token', '')
+            self.github_service.set_token(token)
+            # Atualizar serviços no widget de downloads
+            self.downloads_widget.configure_services(self.github_service, self.config)
+            # Informar que é necessário reiniciar para mudança de idioma
+            QMessageBox.information(
+                self,
+                tr("restart_required_title"),
+                tr("restart_required_msg")
+            )
 
     def _on_language_changed(self, _index: int):
         """Salva o idioma selecionado e pede para reiniciar"""

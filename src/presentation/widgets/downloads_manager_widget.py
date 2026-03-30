@@ -2,11 +2,11 @@
 Widget para gerenciamento de downloads do OptiScaler
 """
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar,
-    QMessageBox, QFrame
+    QMessageBox, QFrame, QGroupBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
@@ -57,18 +57,34 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
         self,
         fetch_versions_uc: FetchVersionsUseCase,
         download_version_uc: DownloadVersionUseCase,
-        db_service: DatabaseService
+        db_service: DatabaseService,
+        github_service=None,
+        config=None,
     ):
         super().__init__()
         self.fetch_versions_uc = fetch_versions_uc
         self.download_version_uc = download_version_uc
         self.db_service = db_service
+        self._github_service = github_service
+        self._config = config
         
         self.current_download: Optional[DownloadThread] = None
         self.versions = []
+        self._beta_versions = []
         
         self._setup_ui()
         self._load_versions()
+
+    def configure_services(self, github_service, config):
+        """Atualiza referências de serviços após construção."""
+        self._github_service = github_service
+        self._config = config
+        self._update_beta_visibility()
+
+    def _update_beta_visibility(self):
+        show = self._config and self._config.get('github.show_betas', False)
+        if hasattr(self, '_beta_group'):
+            self._beta_group.setVisible(bool(show))
     
     def _setup_ui(self):
         """Configura interface"""
@@ -98,6 +114,11 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
         # Botões de ação
         actions = self._create_actions()
         layout.addWidget(actions)
+
+        # --- Seção de Betas ---
+        self._beta_group = self._create_beta_section()
+        layout.addWidget(self._beta_group)
+        self._update_beta_visibility()
     
     def _create_header(self) -> QWidget:
         """Cria cabeçalho"""
@@ -202,7 +223,165 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
         layout.addWidget(clear_btn)
         
         return widget
-    
+
+    def _create_beta_section(self) -> QGroupBox:
+        """Cria seção de builds beta (via GitHub Actions)."""
+        grp = QGroupBox(tr("dl_beta_section"))
+        layout = QVBoxLayout(grp)
+
+        # Toolbar da seção
+        bar = QWidget()
+        bar_layout = QHBoxLayout(bar)
+        bar_layout.setContentsMargins(0, 0, 0, 0)
+
+        self._beta_info_label = QLabel()
+        self._beta_info_label.setStyleSheet("color: #888; font-size: 11px;")
+        bar_layout.addWidget(self._beta_info_label)
+        bar_layout.addStretch()
+
+        self._fetch_beta_btn = QPushButton(tr("dl_beta_fetch_btn"))
+        self._fetch_beta_btn.clicked.connect(self._fetch_betas)
+        bar_layout.addWidget(self._fetch_beta_btn)
+        layout.addWidget(bar)
+
+        # Nota sobre token
+        note = QLabel(tr("dl_beta_artifact_note"))
+        note.setStyleSheet("color: #c7963a; font-size: 11px;")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        # Tabela de betas
+        self.beta_table = QTableWidget(0, 5)
+        self.beta_table.setHorizontalHeaderLabels([
+            tr("dl_col_version"), tr("dl_col_name"), tr("dl_col_date"),
+            tr("dl_col_status"), tr("dl_col_action"),
+        ])
+        hdr = self.beta_table.horizontalHeader()
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        hdr.resizeSection(4, 155)
+        self.beta_table.verticalHeader().setVisible(False)
+        self.beta_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.beta_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.beta_table.setMaximumHeight(200)
+        layout.addWidget(self.beta_table)
+
+        return grp
+
+    def _fetch_betas(self):
+        """Busca betas via GitHub Actions."""
+        if not self._github_service:
+            QMessageBox.warning(self, tr("warning_title"), tr("dl_beta_no_token"))
+            return
+
+        token = (self._config.get('github.token', '') if self._config else '')
+        if not token:
+            QMessageBox.warning(self, tr("warning_title"), tr("dl_beta_no_token"))
+            return
+
+        repo = (self._config.get('github.beta_repo', 'cdozdil/OptiScaler') if self._config else 'cdozdil/OptiScaler')
+        workflow = (self._config.get('github.beta_workflow', 'release_debug.yml') if self._config else 'release_debug.yml')
+        pattern = (self._config.get('github.beta_branch_pattern', r'release/0\.[0-9].*') if self._config else r'release/0\.[0-9].*')
+
+        self._fetch_beta_btn.setEnabled(False)
+        self._fetch_beta_btn.setText(tr("dl_beta_fetching"))
+
+        try:
+            self._beta_versions = self._github_service.fetch_beta_builds(
+                repo=repo, workflow=workflow, branch_pattern=pattern
+            )
+            self._update_beta_table()
+        except Exception as e:
+            self.logger.error(f"Erro ao buscar betas: {e}")
+            QMessageBox.critical(self, tr("error_title"), tr("dl_fetch_error_msg", error=str(e)))
+        finally:
+            self._fetch_beta_btn.setEnabled(True)
+            self._fetch_beta_btn.setText(tr("dl_beta_fetch_btn"))
+
+    def _update_beta_table(self):
+        """Atualiza tabela de betas."""
+        self.beta_table.setRowCount(0)
+
+        for version in self._beta_versions:
+            row = self.beta_table.rowCount()
+            self.beta_table.insertRow(row)
+
+            self.beta_table.setItem(row, 0, QTableWidgetItem(version.tag_name))
+            self.beta_table.setItem(row, 1, QTableWidgetItem(version.name))
+            date_str = version.release_date.strftime("%d/%m/%Y") if version.release_date else "-"
+            self.beta_table.setItem(row, 2, QTableWidgetItem(date_str))
+
+            if version.is_downloaded:
+                st = QTableWidgetItem(tr("dl_status_downloaded"))
+                st.setForeground(QColor("#6c9010"))
+            else:
+                st = QTableWidgetItem(tr("dl_status_pending"))
+                st.setForeground(QColor("#8b939c"))
+            self.beta_table.setItem(row, 3, st)
+
+            if version.is_downloaded:
+                btn = QPushButton(tr("dl_btn_remove"))
+                btn.clicked.connect(lambda checked, v=version: self._delete_version(v))
+                btn.setStyleSheet("QPushButton{background:#c93434;color:white;border:none;border-radius:4px;font-weight:bold;}"
+                                  "QPushButton:hover{background:#d94545;}")
+            else:
+                btn = QPushButton(tr("dl_btn_download"))
+                btn.clicked.connect(lambda checked, v=version: self._download_beta_artifact(v))
+                btn.setStyleSheet("QPushButton{background:#5c7e10;color:white;border:none;border-radius:4px;font-weight:bold;}"
+                                  "QPushButton:hover{background:#6c9010;}")
+
+            container = QWidget()
+            container.setStyleSheet("background-color: transparent;")
+            cl = QHBoxLayout(container)
+            cl.setContentsMargins(8, 7, 8, 7)
+            cl.addWidget(btn)
+            self.beta_table.setCellWidget(row, 4, container)
+
+        self._beta_info_label.setText(f"{len(self._beta_versions)} beta(s) encontrado(s)")
+
+    def _download_beta_artifact(self, version: OptiScalerVersion):
+        """Faz download de um artefato de workflow."""
+        if not self._github_service:
+            QMessageBox.warning(self, tr("warning_title"), tr("dl_beta_no_token"))
+            return
+
+        token = (self._config.get('github.token', '') if self._config else '')
+        if not token:
+            QMessageBox.warning(self, tr("warning_title"), tr("dl_beta_no_token"))
+            return
+
+        if not version.github_id:
+            QMessageBox.warning(self, tr("warning_title"), tr("dl_beta_no_token"))
+            return
+
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+
+        artifact_id = version.github_id
+        output_path = self._github_service.cache_dir / f"{version.tag_name}.zip"
+
+        def _progress(d, t):
+            if t > 0:
+                self.progress_bar.setValue(int(d / t * 100))
+
+        try:
+            result = self._github_service.download_artifact(artifact_id, output_path, _progress)
+            if result:
+                version.is_downloaded = True
+                version.cache_path = result
+                QMessageBox.information(self, tr("dl_fetch_ok_title"),
+                                        tr("dl_done_ok", version=version.tag_name))
+                self._update_beta_table()
+            else:
+                QMessageBox.critical(self, tr("error_title"), tr("dl_done_fail"))
+        except Exception as e:
+            QMessageBox.critical(self, tr("error_title"), tr("dl_fetch_error_msg", error=str(e)))
+        finally:
+            self.progress_bar.setVisible(False)
+
     def _load_versions(self):
         """Carrega versões do banco de dados"""
         self.logger.info("Carregando versões do banco de dados")

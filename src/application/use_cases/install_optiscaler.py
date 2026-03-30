@@ -1,6 +1,7 @@
 """
 Use Case: Instalar OptiScaler em um jogo
 """
+import sys
 import shutil
 import tempfile
 import json
@@ -21,7 +22,7 @@ except ImportError:
     HAS_PY7ZR = False
 
 from utils.logger import LoggerMixin
-from utils.constants import FSR4_SDK_DIR
+from utils.constants import FSR4_SDK_DIR, FSR4_USER_SDK_DIR
 from domain.repositories.game_repository import GameRepository
 from domain.repositories.version_repository import VersionRepository
 from domain.repositories.installation_repository import InstallationRepository
@@ -41,11 +42,92 @@ SUPPORTED_LOADER_DLLS = [
     "winhttp.dll",
 ]
 
-# Variantes do FSR4 SDK
+# Variantes do FSR4 SDK (somente-leitura, embutidas)
 FSR4_VARIANTS = {
     "standard": FSR4_SDK_DIR / "standard",
-    "int8": FSR4_SDK_DIR / "int8",
+    "int8":     FSR4_SDK_DIR / "int8",
 }
+
+
+def _pick_int8_dll(directory: Path) -> Optional[Path]:
+    """
+    Escolhe a DLL int8 correta dentro de um diretório de versão.
+    Prioriza amd_fidelityfx_upscaler_dx12.dll (a única que o int8 substitui).
+    """
+    dlls = list(directory.glob("*.dll"))
+    if not dlls:
+        return None
+    # Preferir a DLL de upscaler pelo nome
+    for dll in dlls:
+        if 'upscaler' in dll.name.lower():
+            return dll
+    return dlls[0]
+
+
+def _scan_int8_dir(base_dir: Path, versions: dict, prefix: str = ""):
+    """
+    Varre um diretório por versões int8.
+    Suporta:
+      - subpastas versionadas: {version}/ contendo *.dll
+      - DLLs diretas na raiz (fallback "bundled")
+    Não sobrescreve versões já encontradas (prioridade de chamada).
+    """
+    if not base_dir.exists():
+        return
+
+    has_subdirs = False
+    for d in sorted(base_dir.iterdir()):
+        if d.is_dir():
+            dll = _pick_int8_dll(d)
+            if dll:
+                has_subdirs = True
+                key = f"{prefix}{d.name}" if prefix else d.name
+                if key not in versions:
+                    versions[key] = dll
+
+    # Fallback: DLLs diretas na raiz (sem subpastas de versão)
+    if not has_subdirs:
+        dll = _pick_int8_dll(base_dir)
+        if dll:
+            key = f"{prefix}bundled" if prefix else "bundled"
+            if key not in versions:
+                versions[key] = dll
+
+
+def get_int8_versions(custom_versions: dict = None) -> dict:
+    """
+    Retorna todas as versões int8 disponíveis.
+
+    Busca em (em ordem de prioridade):
+      1. resources/fsr4_sdk/int8/  (embutido — subpastas versionadas ou DLL direta)
+      2. SDK DLL/DLL INT8/          (pasta de desenvolvimento, apenas modo não-frozen)
+      3. ~/.local/share/optiscaler-center/fsr4_sdk/int8/  (adicionadas pelo usuário)
+      4. Versões customizadas via config (caminhos diretos)
+
+    Returns:
+        {version_name: Path} — versões disponíveis
+    """
+    versions: dict = {}
+
+    # 1. Embutido (resources/fsr4_sdk/int8/)
+    _scan_int8_dir(FSR4_SDK_DIR / "int8", versions)
+
+    # 2. Desenvolvimento: "SDK DLL/DLL INT8/" na raiz do projeto (não-frozen apenas)
+    if not getattr(sys, 'frozen', False):
+        dev_int8 = FSR4_SDK_DIR.parent.parent / "SDK DLL" / "DLL INT8"
+        _scan_int8_dir(dev_int8, versions)
+
+    # 3. Versões adicionadas pelo usuário
+    _scan_int8_dir(FSR4_USER_SDK_DIR / "int8", versions, prefix="user/")
+
+    # 4. Versões customizadas via config (caminhos diretos)
+    if custom_versions:
+        for name, path_str in custom_versions.items():
+            p = Path(path_str)
+            if p.exists() and p.suffix.lower() == '.dll':
+                versions[name] = p
+
+    return versions
 
 
 class InstallOptiScalerUseCase(LoggerMixin):
@@ -69,16 +151,23 @@ class InstallOptiScalerUseCase(LoggerMixin):
         game_id: int,
         version_id: int,
         loader_dll: str = "dxgi.dll",
-        fsr4_variant: Optional[str] = None
+        fsr4_variant: Optional[str] = None,
+        fsr4_int8_version: Optional[str] = None,
+        custom_int8_versions: dict = None,
+        custom_standard_dlls: dict = None,
     ) -> bool:
         """
         Instala OptiScaler em um jogo.
 
         Args:
-            game_id: ID do jogo
-            version_id: ID da versão do OptiScaler
-            loader_dll: Nome do DLL loader (ex: dxgi.dll, winmm.dll)
-            fsr4_variant: Variante FSR4 SDK a copiar: "standard", "int8" ou None
+            game_id:               ID do jogo
+            version_id:            ID da versão do OptiScaler
+            loader_dll:            Nome do DLL loader (ex: dxgi.dll, winmm.dll)
+            fsr4_variant:          "standard" (instala as 3 DLLs padrão), ou None
+            fsr4_int8_version:     Versão int8 a sobrepor sobre o upscaler padrão (ex: "4.0.2c").
+                                   Requer fsr4_variant="standard". None = não sobrepor.
+            custom_int8_versions:  Dict {nome: caminho} para versões int8 customizadas.
+            custom_standard_dlls:  Dict {dll_name: path} para substituir DLLs padrão individuais.
 
         Returns:
             True se sucesso, False caso contrário
@@ -156,8 +245,18 @@ class InstallOptiScalerUseCase(LoggerMixin):
 
                     # Copiar FSR4 SDK se solicitado
                     if fsr4_variant:
-                        fsr4_names = self._copy_fsr4_sdk(game_dir, fsr4_variant)
+                        # 1. Sempre instalar as 3 DLLs padrão (com possíveis substituições)
+                        fsr4_names = self._copy_fsr4_standard(
+                            game_dir, custom_dlls=custom_standard_dlls or {}
+                        )
                         installed_names.extend(fsr4_names)
+
+                        # 2. Se quiser int8, sobrepor o upscaler (mesmo nome → sobrescreve)
+                        if fsr4_int8_version:
+                            int8_names = self._copy_fsr4_int8(
+                                game_dir, fsr4_int8_version, custom_int8_versions or {}
+                            )
+                            installed_names.extend(int8_names)
 
                     # Salvar manifesto dos arquivos instalados no backup
                     self._save_manifest(backup.backup_path, installed_names, loader_dll)
@@ -289,33 +388,74 @@ class InstallOptiScalerUseCase(LoggerMixin):
             self.logger.debug(f"  Copiado: {dest_name}")
         return installed
 
-    def _copy_fsr4_sdk(self, game_dir: Path, variant: str) -> list:
-        """Copia os arquivos do FSR4 SDK para o diretório do jogo. Retorna nomes copiados."""
-        sdk_dir = FSR4_VARIANTS.get(variant)
+    def _copy_fsr4_standard(self, game_dir: Path, custom_dlls: dict = None) -> list:
+        """
+        Copia as 3 DLLs padrão do FSR4 SDK para o diretório do jogo.
+
+        Args:
+            game_dir:    Diretório de destino
+            custom_dlls: Dict {dll_name: path_str} para substituir DLLs individuais.
+                         Exemplo: {'amd_fidelityfx_upscaler_dx12.dll': '/path/nova.dll'}
+        """
+        sdk_dir = FSR4_VARIANTS["standard"]
         if not sdk_dir or not sdk_dir.exists():
-            self.logger.warning(f"FSR4 SDK '{variant}' não encontrado em {sdk_dir}")
+            self.logger.warning(f"FSR4 SDK 'standard' não encontrado em {sdk_dir}")
             return []
 
-        # Verificar se há DLLs diretas; caso contrário, buscar em subpastas de versão
-        direct_dlls = list(sdk_dir.glob('*.dll'))
-        if not direct_dlls:
-            version_dirs = sorted(
-                [d for d in sdk_dir.iterdir() if d.is_dir()],
-                key=lambda d: d.name
-            )
-            if not version_dirs:
-                self.logger.warning(f"FSR4 SDK '{variant}' não contém DLLs nem subpastas de versão")
-                return []
-            sdk_dir = version_dirs[-1]  # subpasta de versão mais recente
-            self.logger.info(f"FSR4 SDK '{variant}': usando versão {sdk_dir.name}")
-
         installed = []
-        for dll in sdk_dir.glob('*.dll'):
+        for dll in sorted(sdk_dir.glob('*.dll')):
+            # Verificar se há substituição configurada para esta DLL
+            if custom_dlls and dll.name in custom_dlls:
+                custom_path = Path(custom_dlls[dll.name])
+                if custom_path.exists():
+                    shutil.copy2(custom_path, game_dir / dll.name)
+                    installed.append(dll.name)
+                    self.logger.info(f"  FSR4 padrão (custom): {dll.name} ← {custom_path.name}")
+                    continue
+                else:
+                    self.logger.warning(f"  Caminho custom não encontrado para {dll.name}: {custom_path}. Usando bundled.")
             shutil.copy2(dll, game_dir / dll.name)
             installed.append(dll.name)
-            self.logger.debug(f"  FSR4 SDK: {dll.name}")
-        self.logger.info(f"✓ {len(installed)} arquivo(s) FSR4 SDK ({variant}) copiado(s)")
+            self.logger.debug(f"  FSR4 padrão: {dll.name}")
+        self.logger.info(f"✓ {len(installed)} DLL(s) FSR4 padrão copiada(s)")
         return installed
+
+    def _copy_fsr4_int8(self, game_dir: Path, version_name: str, custom_versions: dict) -> list:
+        """
+        Substitui o upscaler padrão pela versão int8 escolhida.
+
+        Procura a versão em:
+          1. Dicionário custom_versions {nome: Path}
+          2. Subpastas de resources/fsr4_sdk/int8/
+          3. Subpastas de user_data/fsr4_sdk/int8/
+        """
+        int8_versions = get_int8_versions(
+            {k: str(v) for k, v in custom_versions.items()} if custom_versions else {}
+        )
+        dll_path = int8_versions.get(version_name)
+
+        if not dll_path or not dll_path.exists():
+            self.logger.warning(f"Versão int8 '{version_name}' não encontrada. Disponíveis: {list(int8_versions.keys())}")
+            return []
+
+        dest_name = dll_path.name  # amd_fidelityfx_upscaler_dx12.dll
+        shutil.copy2(dll_path, game_dir / dest_name)
+        self.logger.info(f"✓ FSR4 int8 '{version_name}' copiado ({dest_name})")
+        return [dest_name]
+
+    def _copy_fsr4_sdk(self, game_dir: Path, variant: str) -> list:
+        """Mantido para compatibilidade retroativa. Use _copy_fsr4_standard/_copy_fsr4_int8."""
+        if variant == "standard":
+            return self._copy_fsr4_standard(game_dir)
+        elif variant == "int8":
+            # modo legado: pega a versão mais recente disponível
+            versions = get_int8_versions()
+            if not versions:
+                self.logger.warning("Nenhuma versão int8 disponível")
+                return []
+            latest = sorted(versions.keys())[-1]
+            return self._copy_fsr4_int8(game_dir, latest, {})
+        return []
 
     def _save_manifest(self, backup_dir: Path, installed_names: list, loader_dll: str):
         """Salva manifesto JSON com lista de arquivos instalados."""
