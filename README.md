@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)
+![Version](https://img.shields.io/badge/version-0.1.6-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
@@ -72,19 +72,19 @@ Baixe a versão mais recente na [página de releases](https://github.com/Jhonath
 
 #### Linux (AppImage) — Recomendado 🚀
 ```bash
-chmod +x OptiScalerCenter-Linux-v0.1.5.AppImage
-./OptiScalerCenter-Linux-v0.1.5.AppImage
+chmod +x OptiScalerCenter-Linux-v0.1.6.AppImage
+./OptiScalerCenter-Linux-v0.1.6.AppImage
 ```
 Não requer instalação. Funciona em qualquer distribuição Linux.
 
 #### Linux (TAR.GZ)
 ```bash
-tar -xzf OptiScalerCenter-Linux-v0.1.5.tar.gz
+tar -xzf OptiScalerCenter-Linux-v0.1.6.tar.gz
 ./OptiScalerCenter/OptiScalerCenter
 ```
 
 #### Windows
-1. Baixe `OptiScalerCenter-Windows-v0.1.5.zip`
+1. Baixe `OptiScalerCenter-Windows-v0.1.6.zip`
 2. Extraia e execute `OptiScalerCenter.exe`
 
 ---
@@ -211,7 +211,7 @@ OptiScaler-Center/
 
 ## 🗺️ Roadmap
 
-### ✅ Concluído (v0.1.5)
+### ✅ Concluído (v0.1.6)
 - [x] Scanner de jogos Steam (Windows e Linux)
 - [x] Interface moderna com cards estilo Steam
 - [x] Download de versões estáveis e betas do GitHub

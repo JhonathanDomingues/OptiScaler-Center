@@ -7,7 +7,17 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-04-13
+
+### Adicionado
+- Validação pré-instalação: quando nenhum `.exe` é encontrado no diretório determinado, o instalador busca automaticamente por DLLs conhecidas (`amd_fidelityfx_upscaler_dx12.dll`, `nvngx_dlss.dll`, `libxess.dll`, etc.) para localizar o diretório correto
+- Suporte a jogos adicionados manualmente (não detectados pela Steam) via botão **"➕ Adicionar Jogo"** na barra de ferramentas
+- Diálogo `AddManualGameDialog` com campo de nome, seletor de pasta e auto-preenchimento do nome pelo diretório escolhido
+- Jogos manuais são analisados automaticamente para detectar DLLs de upscaling e persistidos com `platform=MANUAL`
+- Jogos adicionados manualmente são preservados após novas varreduras Steam
+
 ### Corrigido
+- Após varredura Steam, a lista de jogos agora recarrega todos os jogos do banco (incluindo os manuais), evitando que sumissem da exibição
 - Conteúdo duplicado removido do README.md
 
 ### Manutenção
@@ -85,7 +95,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Priorização de imagens verticais nos cards (evitar distorção de imagens horizontais)
 - Ícone de controle nos cards de jogo
 
-[Unreleased]: https://github.com/JhonathanDomingues/OptiScaler-Center/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/JhonathanDomingues/OptiScaler-Center/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/JhonathanDomingues/OptiScaler-Center/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/JhonathanDomingues/OptiScaler-Center/releases/tag/v0.1.5
 [0.1.3]: https://github.com/JhonathanDomingues/OptiScaler-Center/releases/tag/v0.1.3
 [0.0.1]: https://github.com/JhonathanDomingues/OptiScaler-Center/compare/fbc49b5...v0.1.3
