@@ -9,6 +9,7 @@ from utils.logger import LoggerMixin
 from application.services.game_scanner import GameScanner
 from domain.repositories.game_repository import GameRepository
 from domain.entities.game import Game
+from domain.enums.platform import Platform
 from infrastructure.database.db_service import DatabaseService
 
 
@@ -140,10 +141,49 @@ class ScanGamesUseCase(LoggerMixin):
     def get_games_with_upscaling(self) -> List[Game]:
         """
         Busca jogos com suporte a upscaling
-        
+
         Returns:
             Lista de jogos
         """
         with self.db_service.get_connection() as conn:
             game_repo = GameRepository(conn)
             return game_repo.find_with_upscaling_support()
+
+    def add_manual_game(self, name: str, path: Path) -> Optional[Game]:
+        """
+        Adiciona um jogo manualmente (não detectado pelo Steam).
+        Analisa DLLs no diretório informado e persiste com platform=MANUAL.
+        Jogos manuais são preservados mesmo após novas varreduras Steam.
+
+        Args:
+            name: Nome do jogo
+            path: Caminho da pasta de instalação
+
+        Returns:
+            Game salvo ou None em caso de erro
+        """
+        self.logger.info(f"Adicionando jogo manual: {name} ({path})")
+
+        try:
+            detected_dlls = self.game_scanner.dll_analyzer.analyze_game(path)
+        except Exception as e:
+            self.logger.warning(f"Falha ao analisar DLLs de {path}: {e}")
+            detected_dlls = {}
+
+        game = Game(
+            name=name,
+            path=path,
+            platform=Platform.MANUAL,
+        )
+        for dll_type, dll_info in detected_dlls.items():
+            game.supported_dlls[dll_type] = dll_info
+
+        with self.db_service.get_connection() as conn:
+            game_repo = GameRepository(conn)
+            game_repo.save(game)
+
+        self.logger.info(
+            f"✓ Jogo manual salvo: {name} "
+            f"(DLSS={game.has_dlss}, FSR={game.has_fsr}, XeSS={game.has_xess})"
+        )
+        return game

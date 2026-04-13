@@ -477,7 +477,8 @@ class InstallOptiScalerUseCase(LoggerMixin):
           2. <GameName>/Binaries/Win64
           3. Binaries/Win64 diretamente
           4. Diretório do executável principal (maior score por tamanho + DLLs de upscaling)
-          5. game_path como fallback
+          5. Fallback por DLLs conhecidas (quando não há .exe no diretório escolhido)
+          6. game_path como fallback final
         """
         # Regra 1: estrutura Phoenix (UE5)
         phoenix_path = game_path / "Phoenix" / "Binaries" / "Win64"
@@ -502,7 +503,49 @@ class InstallOptiScalerUseCase(LoggerMixin):
         if best_dir:
             return best_dir
 
+        # Regra 4: fallback por DLLs conhecidas quando não há .exe
+        dll_dir = self._find_dir_by_known_dlls(game_path)
+        if dll_dir:
+            self.logger.info(
+                f"Nenhum .exe encontrado — usando diretório com DLLs conhecidas: {dll_dir}"
+            )
+            return dll_dir
+
         return game_path
+
+    def _find_dir_by_known_dlls(self, game_path: Path) -> Optional[Path]:
+        """
+        Busca o diretório correto de instalação procurando por DLLs conhecidas de upscaling
+        quando não há executável (.exe) detectável.
+
+        Procura em ordem de prioridade:
+          1. amd_fidelityfx_upscaler_dx12.dll  (FSR4 SDK)
+          2. nvngx_dlss.dll / nvngx.dll         (DLSS)
+          3. libxess.dll                         (XeSS)
+          4. amd_fidelityfx_dx12.dll            (FSR2/FSR3)
+          5. dxgi.dll                            (loader genérico — menor prioridade)
+
+        Returns:
+            Diretório pai da primeira DLL encontrada, ou None.
+        """
+        KNOWN_DLLS = [
+            "amd_fidelityfx_upscaler_dx12.dll",
+            "nvngx_dlss.dll",
+            "nvngx.dll",
+            "libxess.dll",
+            "amd_fidelityfx_dx12.dll",
+            "dxgi.dll",
+        ]
+        try:
+            for dll_name in KNOWN_DLLS:
+                matches = list(game_path.rglob(dll_name))
+                if matches:
+                    found = matches[0].parent
+                    self.logger.info(f"DLL de referência encontrada: {dll_name} → {found}")
+                    return found
+        except PermissionError:
+            pass
+        return None
 
     def _find_best_exe_dir(self, game_path: Path) -> Optional[Path]:
         """Encontra o diretório do executável principal usando heurística de score."""

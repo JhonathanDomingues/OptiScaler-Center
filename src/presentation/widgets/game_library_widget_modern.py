@@ -5,7 +5,7 @@ Layout em grid com cards de jogos estilo Steam
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
     QGridLayout, QGroupBox, QLabel, QPushButton, QComboBox, QProgressBar, QMessageBox,
-    QTextEdit, QDialog, QDialogButtonBox, QSplitter, QCheckBox
+    QTextEdit, QDialog, QDialogButtonBox, QSplitter, QCheckBox, QLineEdit, QFileDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtGui import QIcon
@@ -157,6 +157,11 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         self.filter_combo.currentIndexChanged.connect(self._apply_filter)
         layout.addWidget(self.filter_combo)
 
+        # Botão adicionar jogo manualmente
+        self.add_manual_btn = QPushButton(tr("lib_add_manual_btn"))
+        self.add_manual_btn.clicked.connect(self._add_manual_game)
+        layout.addWidget(self.add_manual_btn)
+
         # Botão varrer jogos
         self.scan_btn = QPushButton(tr("lib_scan_btn"))
         self.scan_btn.clicked.connect(self._scan_games)
@@ -295,8 +300,9 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             QMessageBox.critical(self, tr("error_title"), tr("scan_error_msg", error=error))
             return
 
-        self.games = games
-        self.filtered_games = games.copy()
+        # Recarregar TODOS os jogos do banco (inclui manuais preservados)
+        self.games = self.scan_games_uc.get_all_games()
+        self.filtered_games = self.games.copy()
         self._refresh_grid()
 
         QMessageBox.information(
@@ -453,6 +459,30 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             self.logger.error(f"Erro ao instalar: {e}")
             QMessageBox.critical(self, tr("error_title"), tr("install_error_msg", error=e))
     
+    def _add_manual_game(self):
+        """Abre diálogo para adicionar jogo manualmente."""
+        dialog = AddManualGameDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        name = dialog.game_name
+        path = dialog.game_path
+
+        try:
+            game = self.scan_games_uc.add_manual_game(name, path)
+            if game:
+                QMessageBox.information(
+                    self,
+                    tr("add_manual_done_title"),
+                    tr("add_manual_done_msg", name=game.name),
+                )
+                self._load_existing_games()
+            else:
+                QMessageBox.warning(self, tr("warning_title"), tr("add_manual_fail_msg"))
+        except Exception as e:
+            self.logger.error(f"Erro ao adicionar jogo manual: {e}")
+            QMessageBox.critical(self, tr("error_title"), tr("add_manual_error_msg", error=e))
+
     def _uninstall_optiscaler(self, game: Game):
         """Desinstala OptiScaler do jogo"""
         try:
@@ -632,4 +662,86 @@ class InstallDialog(QDialog):
                 self._config.get('fsr4_sdk.custom_standard_dlls', {}) or {}
             )
 
+        self.accept()
+
+
+class AddManualGameDialog(QDialog):
+    """Diálogo para adicionar um jogo manualmente (sem detecção Steam)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.game_name: str = ""
+        self.game_path: Path = Path()
+
+        self.setWindowTitle(tr("add_manual_title"))
+        self.setMinimumWidth(480)
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout()
+
+        # Nome do jogo
+        layout.addWidget(QLabel(tr("add_manual_name")))
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText(tr("add_manual_name_placeholder"))
+        layout.addWidget(self.name_edit)
+
+        # Pasta do jogo
+        layout.addWidget(QLabel(tr("add_manual_path")))
+        path_row = QWidget()
+        path_layout = QHBoxLayout(path_row)
+        path_layout.setContentsMargins(0, 0, 0, 0)
+        self.path_edit = QLineEdit()
+        self.path_edit.setPlaceholderText(tr("add_manual_path_placeholder"))
+        self.path_edit.setReadOnly(True)
+        path_layout.addWidget(self.path_edit, 1)
+        browse_btn = QPushButton(tr("add_manual_browse"))
+        browse_btn.clicked.connect(self._browse_folder)
+        path_layout.addWidget(browse_btn)
+        layout.addWidget(path_row)
+
+        # Botões
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.setLayout(layout)
+
+    def _browse_folder(self):
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            tr("add_manual_browse_title"),
+            "",
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if folder:
+            self.path_edit.setText(folder)
+            # Auto-preencher nome se ainda estiver vazio
+            if not self.name_edit.text().strip():
+                self.name_edit.setText(Path(folder).name)
+
+    def _on_accept(self):
+        name = self.name_edit.text().strip()
+        path_str = self.path_edit.text().strip()
+
+        if not name:
+            QMessageBox.warning(self, tr("warning_title"), tr("add_manual_name_required"))
+            return
+
+        if not path_str:
+            QMessageBox.warning(self, tr("warning_title"), tr("add_manual_path_required"))
+            return
+
+        path = Path(path_str)
+        if not path.exists():
+            QMessageBox.warning(
+                self, tr("warning_title"), tr("add_manual_path_not_found", path=path_str)
+            )
+            return
+
+        self.game_name = name
+        self.game_path = path
         self.accept()
