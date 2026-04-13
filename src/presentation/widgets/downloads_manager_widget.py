@@ -6,13 +6,14 @@ from typing import Optional, TYPE_CHECKING
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar,
-    QMessageBox, QFrame, QGroupBox
+    QMessageBox, QFrame, QGroupBox, QFileDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
 
 from application.use_cases.fetch_versions import FetchVersionsUseCase
 from application.use_cases.download_version import DownloadVersionUseCase
+from application.use_cases.import_version import ImportVersionUseCase
 from domain.entities.optiscaler_version import OptiScalerVersion
 from domain.repositories.version_repository import VersionRepository
 from infrastructure.database.db_service import DatabaseService
@@ -136,11 +137,16 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
 
         layout.addStretch()
 
+        # Botão importar arquivo local
+        import_btn = QPushButton(tr("dl_import_btn"))
+        import_btn.clicked.connect(self._import_local_file)
+        layout.addWidget(import_btn)
+
         # Botão atualizar
         refresh_btn = QPushButton(tr("dl_refresh_btn"))
         refresh_btn.clicked.connect(self._fetch_versions)
         layout.addWidget(refresh_btn)
-        
+
         return widget
     
     def _create_versions_table(self) -> QTableWidget:
@@ -612,6 +618,40 @@ class DownloadsManagerWidget(QWidget, LoggerMixin):
                 self.logger.error(f"Erro ao remover versão: {e}")
                 QMessageBox.critical(self, tr("error_title"), tr("dl_remove_error_msg", error=e))
     
+    def _import_local_file(self):
+        """Abre seletor de arquivo e importa um .7z ou .zip local."""
+        from pathlib import Path
+        from application.use_cases.import_version import ImportVersionUseCase
+        from utils.constants import CACHE_DIR
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("dl_import_dialog_title"),
+            "",
+            tr("dl_import_dialog_filter"),
+        )
+        if not file_path:
+            return
+
+        try:
+            import_uc = ImportVersionUseCase(self.db_service, CACHE_DIR)
+            version = import_uc.execute(Path(file_path))
+            if version:
+                self.logger.info(f"Versão importada: {version.tag_name}")
+                QMessageBox.information(
+                    self,
+                    tr("dl_import_ok_title"),
+                    tr("dl_import_ok_msg", name=version.name),
+                )
+                self._load_versions()
+        except Exception as e:
+            self.logger.error(f"Erro ao importar: {e}")
+            QMessageBox.critical(
+                self,
+                tr("error_title"),
+                tr("dl_import_error_msg", error=e),
+            )
+
     def _clear_cache(self):
         """Limpa todo o cache"""
         downloaded = sum(1 for v in self.versions if v.is_downloaded)

@@ -3,10 +3,12 @@ Use Case: Instalar OptiScaler em um jogo
 """
 import sys
 import shutil
+import subprocess
+import platform as _platform
 import tempfile
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 try:
@@ -23,6 +25,7 @@ except ImportError:
 
 from utils.logger import LoggerMixin
 from utils.constants import FSR4_SDK_DIR, FSR4_USER_SDK_DIR
+from application.services.setup_script_parser import parse_script, SetupQuestion
 from domain.repositories.game_repository import GameRepository
 from domain.repositories.version_repository import VersionRepository
 from domain.repositories.installation_repository import InstallationRepository
@@ -146,6 +149,44 @@ class InstallOptiScalerUseCase(LoggerMixin):
         self.backup_root = backup_root
         self.backup_root.mkdir(parents=True, exist_ok=True)
 
+    def get_setup_questions(self, version_id: int) -> List[SetupQuestion]:
+        """
+        Extrai as perguntas interativas dos scripts de configuração (setup.sh / setup.bat)
+        contidos no arquivo da versão, sem instalar nada.
+
+        Retorna lista vazia se a versão não contiver scripts de configuração.
+        """
+        try:
+            with self.db_service.get_connection() as conn:
+                version_repo = VersionRepository(conn)
+                version = version_repo.find_by_id(version_id)
+
+            if not version or not version.is_downloaded or not version.local_path:
+                return []
+
+            questions: List[SetupQuestion] = []
+            with tempfile.TemporaryDirectory() as tmp_str:
+                tmp_dir = Path(tmp_str)
+                try:
+                    self._extract_7z(version.local_path, tmp_dir)
+                except Exception as e:
+                    self.logger.warning(f"[Setup] Falha ao extrair para análise: {e}")
+                    return []
+
+                for script in self._find_setup_scripts(tmp_dir):
+                    parsed = parse_script(script)
+                    if parsed:
+                        self.logger.info(
+                            f"[Setup] '{script.name}' → {len(parsed)} pergunta(s) encontrada(s)"
+                        )
+                    questions.extend(parsed)
+
+            return questions
+
+        except Exception as e:
+            self.logger.error(f"[Setup] Erro ao analisar scripts: {e}")
+            return []
+
     def execute(
         self,
         game_id: int,
@@ -155,6 +196,7 @@ class InstallOptiScalerUseCase(LoggerMixin):
         fsr4_int8_version: Optional[str] = None,
         custom_int8_versions: dict = None,
         custom_standard_dlls: dict = None,
+        setup_answers: Optional[List[str]] = None,
     ) -> bool:
         """
         Instala OptiScaler em um jogo.
@@ -168,6 +210,9 @@ class InstallOptiScalerUseCase(LoggerMixin):
                                    Requer fsr4_variant="standard". None = não sobrepor.
             custom_int8_versions:  Dict {nome: caminho} para versões int8 customizadas.
             custom_standard_dlls:  Dict {dll_name: path} para substituir DLLs padrão individuais.
+            setup_answers:         Respostas às perguntas dos scripts de configuração
+                                   (obtidas via UI). Se None e scripts forem encontrados,
+                                   fallback para terminal interativo.
 
         Returns:
             True se sucesso, False caso contrário
@@ -242,6 +287,22 @@ class InstallOptiScalerUseCase(LoggerMixin):
                         self.logger.error(f"Erro ao copiar arquivos: {copy_err}")
                         self._restore_backup(backup, game_dir)
                         return False
+
+                    # 3b. Executar setup scripts (configuração pós-cópia)
+                    setup_scripts = self._find_setup_scripts(tmp_dir)
+                    if setup_scripts:
+                        self.logger.info(
+                            f"[Setup] {len(setup_scripts)} script(s) de configuração encontrado(s)"
+                        )
+                        for script in setup_scripts:
+                            self.logger.info(f"[Setup] Executando: {script.name}")
+                            ok = self._run_setup_script(
+                                script, game_dir, answers=setup_answers
+                            )
+                            if not ok:
+                                self.logger.warning(
+                                    f"[Setup] Script '{script.name}' encerrado com erro ou cancelado."
+                                )
 
                     # Copiar FSR4 SDK se solicitado
                     if fsr4_variant:
@@ -595,6 +656,120 @@ class InstallOptiScalerUseCase(LoggerMixin):
                 best_dir = exe_dir
 
         return best_dir
+
+    # ------------------------------------------------------------------
+    # Setup scripts (mods com configuração interativa)
+    # ------------------------------------------------------------------
+
+    def _find_setup_scripts(self, tmp_dir: Path) -> List[Path]:
+        """
+        Detecta scripts de configuração no diretório extraído.
+
+        Critério:
+          - Linux/macOS: arquivos cujo nome contenha "setup" e extensão .sh
+          - Windows:     arquivos cujo nome contenha "setup" e extensão .bat
+
+        Retorna lista ordenada (o script na raiz tem prioridade sobre subpastas).
+        """
+        system = _platform.system().lower()
+        ext = ".bat" if system == "windows" else ".sh"
+
+        found: List[Path] = []
+        try:
+            for f in tmp_dir.rglob(f"*{ext}"):
+                if "setup" in f.stem.lower():
+                    found.append(f)
+        except PermissionError:
+            pass
+
+        # Prioriza scripts mais próximos da raiz
+        found.sort(key=lambda p: len(p.parts))
+        return found
+
+    def _run_setup_script(
+        self,
+        script: Path,
+        game_dir: Path,
+        answers: Optional[List[str]] = None,
+    ) -> bool:
+        """
+        Executa um script de configuração.
+
+        Se *answers* for fornecido (lista de respostas no mesmo ordem das
+        perguntas), o script é executado com as respostas enviadas via stdin —
+        sem abrir janela de terminal.
+
+        Se *answers* for None, tenta abrir um emulador de terminal gráfico
+        interativo (fallback para execução direta sem janela quando nenhum
+        emulador estiver disponível).
+
+        Retorna True se o processo encerrou com código 0.
+        """
+        system = _platform.system().lower()
+        cwd = str(game_dir)
+
+        try:
+            if system == "windows":
+                if answers is not None:
+                    stdin_data = "\r\n".join(answers).encode("utf-8")
+                    result = subprocess.run(
+                        ["cmd.exe", "/c", str(script)],
+                        cwd=cwd,
+                        input=stdin_data,
+                    )
+                else:
+                    result = subprocess.run(
+                        ["cmd.exe", "/c", str(script)],
+                        cwd=cwd,
+                    )
+                return result.returncode == 0
+
+            # ---- Linux / macOS ----
+            try:
+                script.chmod(script.stat().st_mode | 0o111)
+            except OSError:
+                pass
+
+            script_cmd = ["bash", str(script)]
+
+            if answers is not None:
+                # Respostas coletadas pela UI → pipe via stdin (sem terminal)
+                stdin_data = "\n".join(answers).encode("utf-8")
+                result = subprocess.run(
+                    script_cmd,
+                    cwd=cwd,
+                    input=stdin_data,
+                )
+                return result.returncode == 0
+
+            # Modo interativo: abrir terminal gráfico
+            TERMINAL_CANDIDATES = [
+                ["konsole", "--noclose", "-e"] + script_cmd,
+                ["gnome-terminal", "--wait", "--"] + script_cmd,
+                ["xfce4-terminal", "--disable-server", "--hold", "-x"] + script_cmd,
+                ["mate-terminal", "--"] + script_cmd,
+                ["tilix", "-e"] + script_cmd,
+                ["alacritty", "-e"] + script_cmd,
+                ["xterm", "-hold", "-e"] + script_cmd,
+            ]
+
+            for cmd in TERMINAL_CANDIDATES:
+                try:
+                    result = subprocess.run(cmd, cwd=cwd)
+                    return result.returncode == 0
+                except FileNotFoundError:
+                    continue
+
+            self.logger.warning(
+                "[Setup] Nenhum emulador de terminal encontrado. "
+                "Executando script sem janela interativa."
+            )
+            result = subprocess.run(script_cmd, cwd=cwd)
+            return result.returncode == 0
+
+        except Exception as exc:
+            self.logger.error(f"[Setup] Erro ao executar script '{script.name}': {exc}")
+            return False
 
     def _restore_backup(self, backup: Backup, game_dir: Path):
         """Restaura arquivos do backup em caso de erro."""
