@@ -202,6 +202,21 @@
   "settings_fsr4_remove_bundled_warn":"Versões embutidas não podem ser removidas.",
   "settings_fsr4_remove_error_msg":  "Erro ao remover versão:\n{error}",
 
+  "dl_import_btn":             "📂 Importar Arquivo",
+  "dl_import_dialog_title":    "Selecionar arquivo do OptiScaler",
+  "dl_import_dialog_filter":   "Arquivos compactados (*.7z *.zip);;Todos os arquivos (*)",
+  "dl_import_ok_title":        "Importação Concluída",
+  "dl_import_ok_msg":          "✓ '{name}' importado com sucesso e disponível para instalação.",
+  "dl_import_error_msg":       "Falha ao importar arquivo:\n{error}",
+
+  "setup_dialog_title":        "Configuração do Mod: {script}",
+  "setup_dialog_header":       "Script de configuração detectado: {script}",
+  "setup_dialog_hint":         "Selecione as opções abaixo de acordo com o seu hardware. As respostas serão enviadas automaticamente ao script.",
+  "setup_dialog_apply_btn":    "Aplicar e Instalar",
+  "setup_dialog_yes":          "Sim",
+  "setup_dialog_no":           "Não",
+  "setup_dialog_text_placeholder": "Digite aqui...",
+
   "dl_beta_section":         "🧪 Betas (GitHub Actions)",
   "dl_beta_fetch_btn":       "🔄 Buscar Betas",
   "dl_beta_no_token":        "Token GitHub não configurado. Vá em Configurações → GitHub.",

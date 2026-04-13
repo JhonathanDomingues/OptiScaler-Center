@@ -202,6 +202,21 @@
   "settings_fsr4_remove_bundled_warn":"Bundled versions cannot be removed.",
   "settings_fsr4_remove_error_msg":  "Error removing version:\n{error}",
 
+  "dl_import_btn":             "📂 Import File",
+  "dl_import_dialog_title":    "Select OptiScaler file",
+  "dl_import_dialog_filter":   "Compressed files (*.7z *.zip);;All files (*)",
+  "dl_import_ok_title":        "Import Complete",
+  "dl_import_ok_msg":          "✓ '{name}' imported successfully and available for installation.",
+  "dl_import_error_msg":       "Failed to import file:\n{error}",
+
+  "setup_dialog_title":        "Mod Setup: {script}",
+  "setup_dialog_header":       "Setup script detected: {script}",
+  "setup_dialog_hint":         "Select the options below according to your hardware. The answers will be sent automatically to the script.",
+  "setup_dialog_apply_btn":    "Apply and Install",
+  "setup_dialog_yes":          "Yes",
+  "setup_dialog_no":           "No",
+  "setup_dialog_text_placeholder": "Type here...",
+
   "dl_beta_section":         "🧪 Betas (GitHub Actions)",
   "dl_beta_fetch_btn":       "🔄 Fetch Betas",
   "dl_beta_no_token":        "GitHub token not configured. Go to Settings → GitHub.",

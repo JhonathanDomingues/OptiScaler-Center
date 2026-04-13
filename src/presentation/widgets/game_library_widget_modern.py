@@ -21,6 +21,7 @@ from application.use_cases.download_version import DownloadVersionUseCase
 from application.use_cases.install_optiscaler import InstallOptiScalerUseCase, SUPPORTED_LOADER_DLLS, get_int8_versions
 from application.use_cases.uninstall_optiscaler import UninstallOptiScalerUseCase
 from presentation.widgets.game_card_widget import GameCardWidget
+from presentation.widgets.setup_script_dialog import SetupScriptDialog
 from presentation.styles.modern_theme import MODERN_THEME
 from utils.i18n import tr
 
@@ -437,12 +438,31 @@ class GameLibraryWidget(QWidget, LoggerMixin):
     ):
         """Instala OptiScaler no jogo"""
         try:
+            # --- Verificar se a versão tem scripts de configuração ---
+            setup_answers = None
+            try:
+                questions = self.install_uc.get_setup_questions(version_id)
+                if questions:
+                    # Descobrir o nome da versão para exibir no título do diálogo
+                    downloaded = self.fetch_versions_uc.get_downloaded_versions()
+                    version_name = next(
+                        (v.tag_name for v in downloaded if v.id == version_id),
+                        tr("details_na"),
+                    )
+                    setup_dlg = SetupScriptDialog(version_name, questions, self)
+                    if setup_dlg.exec() != QDialog.DialogCode.Accepted:
+                        return  # usuário cancelou o setup
+                    setup_answers = setup_dlg.answers
+            except Exception as e:
+                self.logger.warning(f"Erro ao verificar setup scripts: {e}")
+
             success = self.install_uc.execute(
                 game.id, version_id,
                 loader_dll=loader_dll,
                 fsr4_variant=fsr4_variant,
                 fsr4_int8_version=fsr4_int8_version,
                 custom_standard_dlls=custom_standard_dlls or {},
+                setup_answers=setup_answers,
             )
             
             if success:
