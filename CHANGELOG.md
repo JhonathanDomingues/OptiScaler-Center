@@ -7,6 +7,17 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-05-08
+
+### Adicionado
+- Importação local de versões de mods e interface de script de configuração (`SetupScriptDialog`) para perguntas interativas do script de instalação
+- `SetupScriptDialog` exibe perguntas extraídas dos scripts `setup.sh`/`setup.bat` com suporte a escolha múltipla, sim/não e texto livre
+
+### Corrigido
+- Jogos desinstalados agora são removidos automaticamente da lista ao realizar nova varredura Steam (jogos adicionados manualmente são preservados)
+- Layout do diálogo de instalação (`InstallDialog`) corrigido: margens, espaçamentos e labels em negrito para melhor legibilidade
+- No Linux, pastas de compatibilidade do Proton e runtimes Steam (`Proton`, `Steam Linux Runtime`, etc.) não aparecem mais como jogos na biblioteca
+
 ## [0.1.6] - 2026-04-13
 
 ### Adicionado
@@ -95,7 +106,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Priorização de imagens verticais nos cards (evitar distorção de imagens horizontais)
 - Ícone de controle nos cards de jogo
 
-[Unreleased]: https://github.com/JhonathanDomingues/OptiScaler-Center/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/JhonathanDomingues/OptiScaler-Center/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/JhonathanDomingues/OptiScaler-Center/compare/v0.1.6...v0.1.9
 [0.1.6]: https://github.com/JhonathanDomingues/OptiScaler-Center/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/JhonathanDomingues/OptiScaler-Center/releases/tag/v0.1.5
 [0.1.3]: https://github.com/JhonathanDomingues/OptiScaler-Center/releases/tag/v0.1.3

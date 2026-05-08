@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Informações da aplicação
 APP_NAME = "OptiScaler Center"
-APP_VERSION = "0.1.8"
+APP_VERSION = "0.1.9"
 APP_AUTHOR = "OptiScaler Center Team"
 APP_DESCRIPTION = "Gerenciador visual para instalação do OptiScaler"
 

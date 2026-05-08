@@ -2,6 +2,7 @@
 Serviço de varredura de jogos
 Orquestra detecção Steam + análise de DLLs + persistência
 """
+import platform as _platform
 from pathlib import Path
 from typing import List, Optional, Dict
 from datetime import datetime
@@ -67,7 +68,11 @@ class GameScanner(LoggerMixin):
         games = []
         for idx, game_info in enumerate(installed_games, 1):
             self.logger.info(f"[{idx}/{total_games}] {game_info['name']}")
-            
+
+            if self._is_proton_or_runtime(game_info.get('name', '')):
+                self.logger.info(f"  → Ignorado (Proton/runtime)")
+                continue
+
             game = self._process_game(game_info)
             if game:
                 games.append(game)
@@ -127,6 +132,21 @@ class GameScanner(LoggerMixin):
         
         return game
     
+    _PROTON_PREFIXES = (
+        "proton ",
+        "proton experimental",
+        "steam linux runtime",
+        "steam play",
+        "pressure vessel",
+    )
+
+    def _is_proton_or_runtime(self, name: str) -> bool:
+        """Retorna True se o nome indica uma ferramenta Proton/runtime no Linux."""
+        if _platform.system() != "Linux":
+            return False
+        lower = name.lower().strip()
+        return any(lower.startswith(p) for p in self._PROTON_PREFIXES)
+
     def _process_game(self, game_info: Dict) -> Optional[Game]:
         """
         Processa informações de um jogo e cria objeto Game
