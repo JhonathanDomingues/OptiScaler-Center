@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.1.6-blue.svg)
+![Version](https://img.shields.io/badge/version-0.1.9-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
@@ -72,19 +72,19 @@ Download the latest version from the [releases page](https://github.com/Jhonatha
 
 #### Linux (AppImage) — Recommended 🚀
 ```bash
-chmod +x OptiScalerCenter-Linux-v0.1.6.AppImage
-./OptiScalerCenter-Linux-v0.1.6.AppImage
+chmod +x OptiScalerCenter-Linux-v0.1.9.AppImage
+./OptiScalerCenter-Linux-v0.1.9.AppImage
 ```
 No installation required. Works on any Linux distribution.
 
 #### Linux (TAR.GZ)
 ```bash
-tar -xzf OptiScalerCenter-Linux-v0.1.6.tar.gz
+tar -xzf OptiScalerCenter-Linux-v0.1.9.tar.gz
 ./OptiScalerCenter/OptiScalerCenter
 ```
 
 #### Windows
-1. Download `OptiScalerCenter-Windows-v0.1.6.zip`
+1. Download `OptiScalerCenter-Windows-v0.1.9.zip`
 2. Extract and run `OptiScalerCenter.exe`
 
 ---
@@ -211,7 +211,10 @@ OptiScaler-Center/
 
 ## 🗺️ Roadmap
 
-### ✅ Completed (v0.1.6)
+### ✅ Completed (v0.1.9)
+- [x] Automatic removal of uninstalled games on re-scan
+- [x] Proton/runtime folder filter on Linux
+- [x] Installation dialog layout fixed
 - [x] Steam game scanner (Windows and Linux)
 - [x] Modern interface with Steam-style cards
 - [x] Stable and beta downloads from GitHub

@@ -52,18 +52,35 @@ class ScanGamesUseCase(LoggerMixin):
         
         # Salvar no banco de dados
         saved_games = []
-        
+
         with self.db_service.get_connection() as conn:
             game_repo = GameRepository(conn)
-            
+
+            # Remover jogos Steam que não estão mais instalados
+            existing_steam_games = [
+                g for g in game_repo.find_all()
+                if g.platform == Platform.STEAM
+            ]
+            scanned_appids = {g.appid for g in games if g.appid}
+            scanned_paths = {str(g.path) for g in games}
+
+            for existing in existing_steam_games:
+                still_installed = (
+                    (existing.appid and existing.appid in scanned_appids) or
+                    str(existing.path) in scanned_paths
+                )
+                if not still_installed:
+                    self.logger.info(f"Removendo jogo desinstalado: {existing.name}")
+                    game_repo.delete(existing.id)
+
             for game in games:
                 try:
                     game_repo.save(game)
                     saved_games.append(game)
-                
+
                 except Exception as e:
                     self.logger.error(f"Erro ao salvar jogo {game.name}: {e}")
-        
+
         self.logger.info(f"✓ Varredura concluída: {len(saved_games)} jogos salvos")
         
         # Imprimir relatório

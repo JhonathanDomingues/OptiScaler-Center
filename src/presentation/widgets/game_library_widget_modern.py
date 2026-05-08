@@ -601,21 +601,31 @@ class InstallDialog(QDialog):
     def _init_ui(self):
         """Inicializa interface"""
         layout = QVBoxLayout()
+        layout.setSpacing(6)
+        layout.setContentsMargins(16, 16, 16, 16)
 
         # Seletor de versão
-        layout.addWidget(QLabel(tr("install_dialog_version")))
+        lbl_version = QLabel(tr("install_dialog_version"))
+        lbl_version.setStyleSheet("font-weight: bold;")
+        layout.addWidget(lbl_version)
         self.version_combo = QComboBox()
         layout.addWidget(self.version_combo)
+        layout.addSpacing(8)
 
         # Seletor de loader DLL
-        layout.addWidget(QLabel(tr("install_dialog_loader")))
+        lbl_loader = QLabel(tr("install_dialog_loader"))
+        lbl_loader.setStyleSheet("font-weight: bold;")
+        layout.addWidget(lbl_loader)
         self.loader_combo = QComboBox()
         for dll in SUPPORTED_LOADER_DLLS:
             self.loader_combo.addItem(dll, dll)
         layout.addWidget(self.loader_combo)
+        layout.addSpacing(8)
 
         # FSR4 SDK — checkbox para habilitar + combo para int8
-        layout.addWidget(QLabel(tr("install_dialog_fsr4")))
+        lbl_fsr4 = QLabel(tr("install_dialog_fsr4"))
+        lbl_fsr4.setStyleSheet("font-weight: bold;")
+        layout.addWidget(lbl_fsr4)
 
         self.fsr4_check = QCheckBox(tr("install_dialog_fsr4_std"))
         self.fsr4_check.setChecked(False)
@@ -626,6 +636,7 @@ class InstallDialog(QDialog):
         int8_row = QWidget()
         int8_layout = QHBoxLayout(int8_row)
         int8_layout.setContentsMargins(20, 0, 0, 0)
+        int8_layout.setSpacing(8)
         int8_layout.addWidget(QLabel(tr("install_dialog_fsr4_int8")))
         self.int8_combo = QComboBox()
         self.int8_combo.addItem(tr("install_dialog_fsr4_int8_none"), None)
@@ -634,6 +645,7 @@ class InstallDialog(QDialog):
         int8_row.setEnabled(False)
         self._int8_row = int8_row
         layout.addWidget(int8_row)
+        layout.addSpacing(8)
 
         # Botões
         buttons = QDialogButtonBox(
