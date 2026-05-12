@@ -270,19 +270,26 @@ class MainWindow(QMainWindow, LoggerMixin):
     def _on_settings(self):
         """Handler para configurações"""
         self.logger.info("Abrindo configurações")
+        i18n = get_service()
+        lang_before = i18n.get_language() if i18n else None
         dialog = SettingsDialog(self.config, self)
         if dialog.exec():
             # Aplicar token atualizado no serviço GitHub
             token = self.config.get('github.token', '')
             self.github_service.set_token(token)
+            # Aplicar repositório estável atualizado
+            stable_repo = self.config.get('github.stable_repo', 'cdozdil/OptiScaler')
+            self.github_service.set_repo(stable_repo)
             # Atualizar serviços no widget de downloads
             self.downloads_widget.configure_services(self.github_service, self.config)
-            # Informar que é necessário reiniciar para mudança de idioma
-            QMessageBox.information(
-                self,
-                tr("restart_required_title"),
-                tr("restart_required_msg")
-            )
+            # Informar restart apenas se o idioma mudou
+            lang_after = i18n.get_language() if i18n else None
+            if lang_before != lang_after:
+                QMessageBox.information(
+                    self,
+                    tr("restart_required_title"),
+                    tr("restart_required_msg")
+                )
 
     def _on_language_changed(self, _index: int):
         """Salva o idioma selecionado e pede para reiniciar"""

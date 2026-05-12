@@ -44,6 +44,13 @@ class GitHubService(LoggerMixin):
         self._token = token
         self._update_auth_headers()
 
+    def set_repo(self, repo: str):
+        """Define/atualiza o repositório estável (formato 'owner/name')."""
+        if '/' in repo:
+            owner, name = repo.split('/', 1)
+            self.REPO_OWNER = owner
+            self.REPO_NAME = name
+
     def _update_auth_headers(self):
         """Atualiza headers com token de autenticação, se disponível."""
         if self._token:
