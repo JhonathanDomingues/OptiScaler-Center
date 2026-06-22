@@ -24,7 +24,7 @@ except ImportError:
     HAS_PY7ZR = False
 
 from utils.logger import LoggerMixin
-from utils.constants import FSR4_SDK_DIR, FSR4_USER_SDK_DIR
+from utils.constants import FSR4_SDK_DIR, FSR4_USER_SDK_DIR, EXTRA_FILES_DIR
 from application.services.setup_script_parser import parse_script, SetupQuestion
 from domain.repositories.game_repository import GameRepository
 from domain.repositories.version_repository import VersionRepository
@@ -319,6 +319,10 @@ class InstallOptiScalerUseCase(LoggerMixin):
                             )
                             installed_names.extend(int8_names)
 
+                    # Copiar arquivos extras (pastas importadas pelo usuário)
+                    extra_names = self._copy_extra_files(game_dir)
+                    installed_names.extend(extra_names)
+
                     # Salvar manifesto dos arquivos instalados no backup
                     self._save_manifest(backup.backup_path, installed_names, loader_dll)
 
@@ -503,6 +507,33 @@ class InstallOptiScalerUseCase(LoggerMixin):
         shutil.copy2(dll_path, game_dir / dest_name)
         self.logger.info(f"✓ FSR4 int8 '{version_name}' copiado ({dest_name})")
         return [dest_name]
+
+    def _copy_extra_files(self, game_dir: Path) -> list:
+        """
+        Copia todos os arquivos das pastas extras importadas pelo usuário para o diretório do jogo.
+        As pastas ficam em EXTRA_FILES_DIR e são gerenciadas pelo SettingsDialog.
+        """
+        if not EXTRA_FILES_DIR.exists():
+            return []
+
+        installed = []
+        for folder in sorted(EXTRA_FILES_DIR.iterdir()):
+            if not folder.is_dir():
+                continue
+            for src in folder.rglob("*"):
+                if not src.is_file():
+                    continue
+                dest = game_dir / src.name
+                try:
+                    shutil.copy2(src, dest)
+                    installed.append(src.name)
+                    self.logger.info(f"  Extra: {src.name} ← {folder.name}/{src.relative_to(folder)}")
+                except Exception as e:
+                    self.logger.warning(f"  Erro ao copiar arquivo extra {src.name}: {e}")
+
+        if installed:
+            self.logger.info(f"✓ {len(installed)} arquivo(s) extra(s) copiado(s)")
+        return installed
 
     def _copy_fsr4_sdk(self, game_dir: Path, variant: str) -> list:
         """Mantido para compatibilidade retroativa. Use _copy_fsr4_standard/_copy_fsr4_int8."""

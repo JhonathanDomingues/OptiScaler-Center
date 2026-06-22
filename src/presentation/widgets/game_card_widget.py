@@ -27,6 +27,7 @@ class GameCardWidget(QFrame):
     uninstall_requested = pyqtSignal(Game)
     configure_requested = pyqtSignal(Game)
     change_image_requested = pyqtSignal(Game)
+    remove_requested = pyqtSignal(Game)
     
     def __init__(self, game: Game, parent=None):
         super().__init__(parent)
@@ -313,11 +314,28 @@ class GameCardWidget(QFrame):
     def mousePressEvent(self, event):
         """Evento de clique no card"""
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self.game)
+            # Verificar se o clique foi sobre a imagem
+            if self.image_label.geometry().contains(event.pos()):
+                self._show_image_menu()
+            else:
+                self.clicked.emit(self.game)
         elif event.button() == Qt.MouseButton.RightButton:
             self._show_context_menu(event.pos())
-        
+
         super().mousePressEvent(event)
+
+    def _show_image_menu(self):
+        """Menu exibido ao clicar no ícone/capa do jogo"""
+        menu = QMenu(self)
+        details_action = menu.addAction("Ver Detalhes")
+        menu.addSeparator()
+        remove_action = menu.addAction("Remover da lista")
+        remove_action.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_TrashIcon))
+
+        details_action.triggered.connect(lambda: self.clicked.emit(self.game))
+        remove_action.triggered.connect(lambda: self.remove_requested.emit(self.game))
+
+        menu.exec(QCursor.pos())
     
     def _show_context_menu(self, pos):
         """Mostra menu de contexto"""

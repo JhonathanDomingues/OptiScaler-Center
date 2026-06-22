@@ -7,6 +7,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-22
+
+### Adicionado
+- **Pastas de Arquivos Extras**: nova aba "Arquivos Extras" nas configurações permite importar pastas que serão copiadas automaticamente para o diretório do jogo após cada instalação do OptiScaler. Ideal para DLLs com nomes novos (como na v4.1.1) que não são mapeadas nas versões anteriores. As pastas são copiadas para dentro do projeto (`extra_files/`) garantindo que não sejam apagadas por engano, e podem ser removidas pela própria ferramenta.
+- **Remoção de jogo pela capa**: ao clicar no ícone/capa do jogo abre um menu com as opções "Ver Detalhes" e "Remover da lista", permitindo excluir o jogo do banco de dados sem desinstalar o OptiScaler.
+
+### Alterado
+- **Tema Bazzite**: cores verdes substituídas por roxo (`#6b21a8` / `#7c3aed`) e fundo alterado para azul escuro (`#0f172a`) em homenagem ao Bazzite OS. Badges de tecnologia (DLSS, FSR, XeSS) mantêm suas cores de marca.
+
 ## [0.1.9] - 2026-05-08
 
 ### Adicionado

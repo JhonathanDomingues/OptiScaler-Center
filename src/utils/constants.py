@@ -41,6 +41,7 @@ BACKUPS_DIR = DATA_DIR / "backups"
 CACHE_DIR = USER_DATA_DIR / "optiscaler_cache"  # gravável
 FSR4_SDK_DIR       = RESOURCES_DIR / "fsr4_sdk"         # somente-leitura (bundled)
 FSR4_USER_SDK_DIR  = USER_DATA_DIR / "fsr4_sdk"         # gravável (DLLs adicionadas pelo usuário)
+EXTRA_FILES_DIR    = USER_DATA_DIR / "extra_files"      # gravável (pastas de arquivos extras)
 LOCALES_DIR        = RESOURCES_DIR / "locales"          # somente-leitura (bundled)
 
 # URLs
@@ -200,6 +201,9 @@ DEFAULT_CONFIG = {
         'verify_downloads': True,
         'parallel_installations': False,
         'developer_mode': False
+    },
+    'extra_files': {
+        'folders': []
     }
 }
 

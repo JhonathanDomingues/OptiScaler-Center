@@ -14,7 +14,7 @@ from PyQt6.QtGui import QFont
 
 from infrastructure.config.config_service import ConfigService
 from application.use_cases.install_optiscaler import get_int8_versions
-from utils.constants import FSR4_SDK_DIR, FSR4_USER_SDK_DIR
+from utils.constants import FSR4_SDK_DIR, FSR4_USER_SDK_DIR, EXTRA_FILES_DIR
 from utils.i18n import tr, get_service
 
 
@@ -40,6 +40,7 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(self._tab_general(), tr("settings_tab_general"))
         self.tabs.addTab(self._tab_github(), tr("settings_tab_github"))
         self.tabs.addTab(self._tab_fsr4(), tr("settings_tab_fsr4"))
+        self.tabs.addTab(self._tab_extra_files(), "Arquivos Extras")
         layout.addWidget(self.tabs)
 
         # Botões
@@ -394,6 +395,106 @@ class SettingsDialog(QDialog):
             self._refresh_int8_table()
         except Exception as e:
             QMessageBox.critical(self, tr("error_title"), tr("settings_fsr4_remove_error_msg", error=e))
+
+    # ---- Aba Arquivos Extras -----------------------------------------
+
+    def _tab_extra_files(self) -> QWidget:
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setSpacing(10)
+
+        hint = QLabel(
+            "Arquivos nestas pastas serão copiados para o diretório do jogo após cada instalação do OptiScaler.\n"
+            "Use para adicionar DLLs novas ou arquivos extras que não estão no pacote padrão."
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(hint)
+
+        self.extra_table = QTableWidget(0, 3)
+        self.extra_table.setHorizontalHeaderLabels(["Nome da Pasta", "Arquivos", "Caminho interno"])
+        hdr = self.extra_table.horizontalHeader()
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.extra_table.verticalHeader().setVisible(False)
+        self.extra_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.extra_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        layout.addWidget(self.extra_table)
+        self._refresh_extra_table()
+
+        btn_row = QWidget()
+        btn_layout = QHBoxLayout(btn_row)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+
+        import_btn = QPushButton("Importar Pasta")
+        import_btn.clicked.connect(self._import_extra_folder)
+        btn_layout.addWidget(import_btn)
+
+        remove_btn = QPushButton("Remover Pasta Selecionada")
+        remove_btn.clicked.connect(self._remove_extra_folder)
+        btn_layout.addWidget(remove_btn)
+
+        btn_layout.addStretch()
+        layout.addWidget(btn_row)
+        layout.addStretch()
+        return w
+
+    def _refresh_extra_table(self):
+        self.extra_table.setRowCount(0)
+        EXTRA_FILES_DIR.mkdir(parents=True, exist_ok=True)
+        for folder in sorted(EXTRA_FILES_DIR.iterdir()):
+            if not folder.is_dir():
+                continue
+            file_count = sum(1 for f in folder.rglob("*") if f.is_file())
+            row = self.extra_table.rowCount()
+            self.extra_table.insertRow(row)
+            self.extra_table.setItem(row, 0, QTableWidgetItem(folder.name))
+            self.extra_table.setItem(row, 1, QTableWidgetItem(str(file_count)))
+            self.extra_table.setItem(row, 2, QTableWidgetItem(str(folder)))
+
+    def _import_extra_folder(self):
+        src = QFileDialog.getExistingDirectory(
+            self, "Selecionar Pasta de Arquivos Extras", "", QFileDialog.Option.ShowDirsOnly
+        )
+        if not src:
+            return
+        src_path = Path(src)
+        dest = EXTRA_FILES_DIR / src_path.name
+        if dest.exists():
+            reply = QMessageBox.question(
+                self, "Pasta já existe",
+                f"A pasta '{src_path.name}' já foi importada. Substituir?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            shutil.rmtree(dest, ignore_errors=True)
+        try:
+            shutil.copytree(src_path, dest)
+            self._refresh_extra_table()
+            QMessageBox.information(self, "Pasta importada", f"Pasta '{src_path.name}' importada com sucesso.")
+        except Exception as e:
+            QMessageBox.critical(self, tr("error_title"), f"Erro ao importar pasta: {e}")
+
+    def _remove_extra_folder(self):
+        rows = self.extra_table.selectionModel().selectedRows()
+        if not rows:
+            return
+        row = rows[0].row()
+        name = self.extra_table.item(row, 0).text()
+        reply = QMessageBox.question(
+            self, "Remover pasta",
+            f"Remover a pasta '{name}' e todos os seus arquivos?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            shutil.rmtree(EXTRA_FILES_DIR / name, ignore_errors=True)
+            self._refresh_extra_table()
+        except Exception as e:
+            QMessageBox.critical(self, tr("error_title"), f"Erro ao remover pasta: {e}")
 
     # ------------------------------------------------------------------
     # Salvar

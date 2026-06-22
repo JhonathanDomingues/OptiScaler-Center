@@ -215,6 +215,7 @@ class GameLibraryWidget(QWidget, LoggerMixin):
             card.clicked.connect(self._on_game_clicked)
             card.install_requested.connect(self._on_install_requested)
             card.uninstall_requested.connect(self._on_uninstall_requested)
+            card.remove_requested.connect(self._on_remove_game)
             
             self.game_cards.append(card)
             self.grid_layout.addWidget(card, row, col)
@@ -432,6 +433,32 @@ class GameLibraryWidget(QWidget, LoggerMixin):
         if reply == QMessageBox.StandardButton.Yes:
             self._uninstall_optiscaler(game)
     
+    def _on_remove_game(self, game: Game):
+        """Remove o jogo da lista (banco de dados) sem desinstalar o OptiScaler."""
+        reply = QMessageBox.question(
+            self,
+            "Remover jogo",
+            f"Remover '{game.name}' da lista?\n\nIsso não desinstala o OptiScaler do jogo.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            from infrastructure.database.db_service import DatabaseService
+            from domain.repositories.game_repository import GameRepository
+
+            db: DatabaseService = self.scan_games_uc.db_service
+            with db.get_connection() as conn:
+                GameRepository(conn).delete(game.id)
+
+            self.games = [g for g in self.games if g.id != game.id]
+            self.filtered_games = [g for g in self.filtered_games if g.id != game.id]
+            self._refresh_grid()
+        except Exception as e:
+            self.logger.error(f"Erro ao remover jogo: {e}")
+            QMessageBox.critical(self, "Erro", f"Não foi possível remover o jogo: {e}")
+
     def _install_optiscaler(
         self, game: Game, version_id: int, loader_dll: str = "dxgi.dll",
         fsr4_variant=None, fsr4_int8_version=None, custom_standard_dlls: dict = None
